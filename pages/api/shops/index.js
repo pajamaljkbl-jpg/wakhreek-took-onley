@@ -12,7 +12,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const { name, city, quartier, category, wave_number, om_number, qr_code_url, description, products } = req.body;
+    const { name, city, quartier, category, wave_number, om_number, qr_code_url, latitude, longitude, description, products } = req.body;
 
     if (!name || !city || !wave_number) {
       return res.status(400).json({ error: 'Nom, ville et numéro Wave sont obligatoires' });
@@ -20,7 +20,7 @@ export default async function handler(req, res) {
 
     const { data: shop, error } = await supabaseAdmin
       .from('shops')
-      .insert({ name, city, quartier, category, wave_number, om_number, qr_code_url, description })
+      .insert({ name, city, quartier, category, wave_number, om_number, qr_code_url, latitude, longitude, description })
       .select()
       .single();
 
