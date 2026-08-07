@@ -5,7 +5,7 @@ import { supabaseAdmin } from '../../../lib/supabase';
 // Renvoie l'URL publique à stocker (qr_code_url d'une boutique, ou
 // proof_image_url d'un paiement).
 export const config = {
-  api: { bodyParser: { sizeLimit: '5mb' } },
+  api: { bodyParser: { sizeLimit: '10mb' } },
 };
 
 export default async function handler(req, res) {
@@ -26,12 +26,12 @@ export default async function handler(req, res) {
     const buffer = Buffer.from(matches[2], 'base64');
     const filename = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`;
 
-    const { error } = await supabaseAdmin.storage.from('public').upload(filename, buffer, {
+    const { error } = await supabaseAdmin.storage.from('wakhreek-took-only').upload(filename, buffer, {
       contentType,
     });
     if (error) return res.status(500).json({ error: error.message });
 
-    const { data } = supabaseAdmin.storage.from('public').getPublicUrl(filename);
+    const { data } = supabaseAdmin.storage.from('wakhreek-took-only').getPublicUrl(filename);
     return res.status(200).json({ url: data.publicUrl });
   } catch (err) {
     console.error(err);
