@@ -28,6 +28,9 @@ chat simulé + boutons "j'ai payé" non vérifiés).
    preuves de paiement soient visibles). C'est nécessaire pour que
    `/api/uploads` fonctionne.
 
+Si tu avais déjà exécuté l'ancien `schema.sql`, ne le relance pas : exécute
+uniquement `migration-existing-database.sql` pour ajouter les colonnes manquantes.
+
 ### 2. Choisir ton ADMIN_SECRET
 Choisis une chaîne longue et aléatoire (ex: un mot de passe généré) et
 mets-la dans la variable `ADMIN_SECRET`. C'est elle qui protège la
@@ -43,16 +46,20 @@ Copie `.env.example` en `.env.local`, remplis toutes les valeurs.
 4. Déploie.
 5. Relie ton domaine `wakhreek.com` à ce projet Vercel.
 
-## Ce qu'il reste à faire côté front-end
+### Parcours disponibles
 
-Le fichier React actuel doit être modifié pour :
-- Appeler `GET /api/shops` au lieu du tableau codé en dur
-- À la création d'une boutique, uploader son QR code via `POST /api/uploads`
-  (folder: `qrcodes`) puis envoyer l'URL obtenue dans `POST /api/shops`
-- Pour un paiement (abonnement ou frais d'entrée), uploader la capture de
-  preuve via `POST /api/uploads` (folder: `proofs`) puis appeler
-  `POST /api/payments` avec l'URL obtenue
-- Construire une petite page admin (protégée par mot de passe = `ADMIN_SECRET`)
-  qui appelle `GET /api/payments?status=pending`, affiche les preuves, et
-  permet d'appeler `POST /api/payments/[id]/review` pour approuver/rejeter
-- Appeler `GET/POST /api/messages` au lieu du chat simulé
+- `/` : inscription acheteur, boutiques et chat après validation des 10 F.
+- `/boutique` : création d'une boutique et preuve de l'abonnement de 6 000 F.
+- `/marche` : catalogue, recherche, panier et création d'une commande.
+- `/admin` : validation ou rejet des preuves avec `ADMIN_SECRET`.
+
+Configure aussi `ADMIN_WAVE_NUMBER` et/ou `ADMIN_WAVE_QR_URL` dans Vercel. Sans
+l'une de ces deux valeurs, l'envoi d'une preuve est volontairement bloqué afin
+qu'un utilisateur ne puisse pas payer vers un compte inconnu.
+
+## Important avant le lancement public
+
+Cette version rend le parcours fonctionnel. Pour une ouverture à grande échelle,
+ajoute ensuite Supabase Auth afin que chaque acheteur et chaque boutique possède
+une session vérifiée, et remplace la validation manuelle Wave par une intégration
+de paiement officielle lorsque ton compte marchand sera disponible.
