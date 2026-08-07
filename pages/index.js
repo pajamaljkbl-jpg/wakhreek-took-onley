@@ -70,6 +70,8 @@ export default function Home() {
     setConversation(conv);
   }
 
+  const [profileShop, setProfileShop] = useState(null);
+  const [showBuyerProfile, setShowBuyerProfile] = useState(false);
   const [proofSubmitted, setProofSubmitted] = useState(false);
   const [submittingProof, setSubmittingProof] = useState(false);
 
@@ -153,7 +155,7 @@ export default function Home() {
     <div style={{ minHeight: '100vh', background: '#fafafa', fontFamily: 'Inter,system-ui,sans-serif' }}>
       <div style={{ background: BLUE, color: 'white', padding: '12px 16px', display: 'flex', justifyContent: 'space-between' }}>
         <b>ONLY TOK - WAKH REEK</b>
-        <span>{buyer.email}</span>
+        <span onClick={() => setShowBuyerProfile(true)} style={{ cursor: 'pointer', textDecoration: 'underline' }}>{buyer.email}</span>
       </div>
 
       <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: 12 }}>
@@ -178,7 +180,13 @@ export default function Home() {
                 </span>
               ))}
             </div>
-            <button onClick={() => openShop(shop)} style={{ ...btnStyle, marginTop: 6 }}>Discuter avec la boutique</button>
+            <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+              <button onClick={() => openShop(shop)} style={{ ...btnStyle, flex: 1 }}>Discuter</button>
+              <button onClick={() => setProfileShop(shop)} style={{ ...btnStyle, flex: 1, background: '#eee', color: '#333' }}>Profil</button>
+              {shop.latitude && shop.longitude && (
+                <a href={`https://www.google.com/maps?q=${shop.latitude},${shop.longitude}`} target="_blank" rel="noreferrer" style={{ ...btnStyle, flex: 1, background: '#eee', color: '#333', textDecoration: 'none', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>📍 Carte</a>
+              )}
+            </div>
           </div>
         ))}
         {!loadingShops && shops.length === 0 && <p>Aucune boutique à {ville} pour l'instant.</p>}
@@ -207,6 +215,10 @@ export default function Home() {
             </div>
           ) : (
             <>
+              <div style={{ display: 'flex', gap: 8, padding: '8px 12px', borderBottom: '1px solid #eee' }}>
+                <a href={`https://meet.jit.si/wakhreek-${conversation.id}#config.startAudioOnly=true`} target="_blank" rel="noreferrer" style={{ ...btnStyle, flex: 1, textDecoration: 'none', textAlign: 'center' }}>📞 Appel audio</a>
+                <a href={`https://meet.jit.si/wakhreek-${conversation.id}`} target="_blank" rel="noreferrer" style={{ ...btnStyle, flex: 1, textDecoration: 'none', textAlign: 'center' }}>🎥 Appel vidéo</a>
+              </div>
               <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
                 {messages.map((m) => (
                   <div key={m.id} style={{ textAlign: m.sender === 'buyer' ? 'right' : 'left', margin: '6px 0' }}>
@@ -222,6 +234,31 @@ export default function Home() {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {profileShop && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setProfileShop(null)}>
+          <div style={{ background: 'white', borderRadius: 20, padding: 24, maxWidth: 380, width: '100%' }} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ marginTop: 0 }}>{profileShop.name}</h2>
+            <p style={{ fontSize: 13, color: '#666' }}>{profileShop.category}</p>
+            <p>{profileShop.quartier}, {profileShop.city}</p>
+            {profileShop.description && <p>{profileShop.description}</p>}
+            <p style={{ fontSize: 13 }}>Wave : {profileShop.wave_number}</p>
+            {profileShop.om_number && <p style={{ fontSize: 13 }}>Orange Money : {profileShop.om_number}</p>}
+            <button onClick={() => setProfileShop(null)} style={btnStyle}>Fermer</button>
+          </div>
+        </div>
+      )}
+
+      {showBuyerProfile && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setShowBuyerProfile(false)}>
+          <div style={{ background: 'white', borderRadius: 20, padding: 24, maxWidth: 380, width: '100%' }} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ marginTop: 0 }}>Mon profil</h2>
+            <p><b>Email :</b> {buyer.email}</p>
+            <p><b>Téléphone :</b> {buyer.phone}</p>
+            <button onClick={() => setShowBuyerProfile(false)} style={btnStyle}>Fermer</button>
+          </div>
         </div>
       )}
     </div>
