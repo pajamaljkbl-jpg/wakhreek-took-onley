@@ -70,18 +70,51 @@ export default function Home() {
     setConversation(conv);
   }
 
-  async function payEntryFee() {
-    const res = await fetch('/api/checkout/create', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'entry_fee', conversationId: conversation.id }),
-    });
-    const { checkoutUrl, error } = await res.json();
-    if (error) return alert(error);
-    // Redirige vers la vraie page de paiement Wave — l'accès ne sera
-    // débloqué qu'après confirmation réelle via le webhook, pas au clic.
-    window.location.href = checkoutUrl;
+  const [proofSubmitted, setProofSubmitted] = useState(false);
+  const [submittingProof, setSubmittingProof] = useState(false);
+
+  async function handleProofUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setSubmittingProof(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const uploadRes = await fetch('/api/uploads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: reader.result, folder: 'proofs' }),
+      });
+      const { url, error } = await uploadRes.json();
+      if (error) {
+        alert(error);
+        setSubmittingProof(false);
+        return;
+      }
+      await fetch('/api/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'entry_fee', conversationId: conversation.id, proofImageUrl: url }),
+      });
+      setProofSubmitted(true);
+      setSubmittingProof(false);
+    };
+    reader.readAsDataURL(file);
   }
+
+  // Vérifie périodiquement si l'admin a validé le paiement des 10F
+  useEffect(() => {
+    if (!conversation || conversation.entry_fee_paid || !proofSubmitted) return;
+    const interval = setInterval(async () => {
+      const res = await fetch('/api/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ buyerId: buyer.id, shopId: activeShop.id }),
+      });
+      const updated = await res.json();
+      if (updated.entry_fee_paid) setConversation(updated);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [conversation, proofSubmitted]);
 
   async function sendMessage() {
     if (!text.trim()) return;
@@ -160,9 +193,17 @@ export default function Home() {
 
           {!conversation.entry_fee_paid ? (
             <div style={{ padding: 20, textAlign: 'center' }}>
-              <p>Entrée foire symbolique : <b>10F</b>, payée directement à la boutique.</p>
+              <p>Entrée foire symbolique : <b>10F</b>, à payer via Wave à l'administrateur.</p>
               <p style={{ fontSize: 12, color: '#666' }}>Filtre les visiteurs sérieux avant de débloquer la messagerie.</p>
-              <button onClick={payEntryFee} style={btnStyle}>Payer 10F via Wave</button>
+              {!proofSubmitted ? (
+                <>
+                  <p style={{ fontSize: 13 }}>1. Paye 10F via le QR Wave de l'administrateur.<br />2. Envoie une capture de la preuve de paiement ci-dessous.</p>
+                  <input type="file" accept="image/*" onChange={handleProofUpload} disabled={submittingProof} />
+                  {submittingProof && <p style={{ fontSize: 12, color: '#666' }}>Envoi en cours...</p>}
+                </>
+              ) : (
+                <p style={{ color: BLUE, fontWeight: 700 }}>Preuve envoyée — en attente de validation par l'administrateur.</p>
+              )}
             </div>
           ) : (
             <>
