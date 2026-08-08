@@ -63,3 +63,4 @@ Cette version rend le parcours fonctionnel. Pour une ouverture à grande échell
 ajoute ensuite Supabase Auth afin que chaque acheteur et chaque boutique possède
 une session vérifiée, et remplace la validation manuelle Wave par une intégration
 de paiement officielle lorsque ton compte marchand sera disponible.
+Version Marketplace V2 connectée à Vercel.
