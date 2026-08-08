@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { supabaseBrowser } from '../lib/supabase-browser';
+import { getSupabaseBrowser } from '../lib/supabase-browser';
 
 const BLUE = '#019EE5';
 const field = { width: '100%', boxSizing: 'border-box', padding: 13, border: '1px solid #d7dde5', borderRadius: 12, marginBottom: 10, fontSize: 16 };
@@ -17,9 +17,7 @@ export default function Compte() {
     e.preventDefault();
     setBusy(true); setMessage('');
     try {
-      if (!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
-        throw new Error('La clé publique Supabase n’est pas encore configurée sur Vercel.');
-      }
+      const supabaseBrowser = getSupabaseBrowser();
       if (mode === 'signup') {
         const { data, error } = await supabaseBrowser.auth.signUp({
           email,
