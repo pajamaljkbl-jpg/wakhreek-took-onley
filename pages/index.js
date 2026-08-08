@@ -147,6 +147,7 @@ export default function Home() {
           <div style={{ width: 64, height: 64, margin: '0 auto 16px', borderRadius: '50%', background: 'linear-gradient(135deg,#e10600,#ffcc00)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 900, fontSize: 22 }}>WR</div>
           <h1 style={{ textAlign: 'center', fontWeight: 900 }}>ONLY TOK<br /><span style={{ color: BLUE }}>WAKH REEK</span></h1>
           <p style={{ textAlign: 'center', fontSize: 12, color: '#8aa0b5', margin: '12px 0 20px' }}>Inscris-toi pour accéder aux boutiques et à la messagerie.</p>
+          <a href="/compte" style={{ display: 'block', textAlign: 'center', color: BLUE, marginBottom: 14, fontWeight: 700 }}>Créer un compte sécurisé ou se connecter</a>
           <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="ton@email.com" style={inputStyle} />
           <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="77 123 45 67" style={{ ...inputStyle, marginTop: 12 }} />
           {signupError && <div style={{ color: '#e10600', fontSize: 12, marginTop: 8 }}>{signupError}</div>}

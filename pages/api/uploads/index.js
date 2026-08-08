@@ -11,7 +11,7 @@ export const config = {
   },
 };
 
-const BUCKET = 'wakhreek-images';
+const BUCKET = 'public';
 const ALLOWED_TYPES = new Set([
   'image/jpeg',
   'image/png',
