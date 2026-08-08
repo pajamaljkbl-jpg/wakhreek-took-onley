@@ -35,6 +35,14 @@ create table products (
   created_at timestamptz default now()
 );
 
+-- Utilisateurs (acheteurs) — doit exister avant la table orders
+create table buyers (
+  id uuid primary key default gen_random_uuid(),
+  email text unique not null,
+  phone text not null,
+  created_at timestamptz default now()
+);
+
 -- Commandes passées par les clients
 create table orders (
   id uuid primary key default gen_random_uuid(),
@@ -55,14 +63,6 @@ create table order_items (
   product_name text not null,
   unit_price integer not null,
   quantity integer not null check (quantity > 0)
-);
-
--- Utilisateurs (acheteurs) — remplace localStorage
-create table buyers (
-  id uuid primary key default gen_random_uuid(),
-  email text unique not null,
-  phone text not null,
-  created_at timestamptz default now()
 );
 
 -- Conversations entre un acheteur et une boutique

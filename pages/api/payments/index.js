@@ -30,6 +30,12 @@ export default async function handler(req, res) {
     if (!proofImageUrl) {
       return res.status(400).json({ error: 'La capture de preuve de paiement est obligatoire' });
     }
+    if (type === 'subscription' && !shopId) {
+      return res.status(400).json({ error: 'shopId obligatoire pour un abonnement' });
+    }
+    if (type === 'entry_fee' && !conversationId) {
+      return res.status(400).json({ error: 'conversationId obligatoire pour les frais d’entrée' });
+    }
 
     const amount = type === 'subscription' ? 6000 : 10;
 

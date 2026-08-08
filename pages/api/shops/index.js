@@ -1,7 +1,10 @@
-import { supabaseAdmin } from '../../../lib/supabase';
+import { assertSupabaseConfigured } from '../../../lib/supabase';
 
 export default async function handler(req, res) {
-  if (req.method === 'GET') {
+  try {
+    const supabaseAdmin = assertSupabaseConfigured();
+
+    if (req.method === 'GET') {
     const { city } = req.query;
     let query = supabaseAdmin.from('shops').select('*, products(*)').order('created_at', { ascending: false });
     if (city && city !== 'Toutes Villes') query = query.eq('city', city);
@@ -9,9 +12,9 @@ export default async function handler(req, res) {
     const { data, error } = await query;
     if (error) return res.status(500).json({ error: error.message });
     return res.status(200).json(data);
-  }
+    }
 
-  if (req.method === 'POST') {
+    if (req.method === 'POST') {
     const { name, city, quartier, category, wave_number, om_number, qr_code_url, latitude, longitude, description, products } = req.body;
 
     if (!name || !city || !wave_number) {
@@ -27,9 +30,13 @@ export default async function handler(req, res) {
     if (error) return res.status(500).json({ error: error.message });
 
     if (Array.isArray(products) && products.length) {
-      await supabaseAdmin.from('products').insert(
-        products.map((p) => ({ shop_id: shop.id, name: p.name, price: p.price || 0 }))
-      );
+      const validProducts = products
+        .filter((p) => p && typeof p.name === 'string' && p.name.trim())
+        .map((p) => ({ shop_id: shop.id, name: p.name.trim(), price: Number(p.price) || 0 }));
+      if (validProducts.length) {
+        const { error: productsError } = await supabaseAdmin.from('products').insert(validProducts);
+        if (productsError) return res.status(500).json({ error: productsError.message });
+      }
     }
 
     // Note: la boutique est créée mais "subscription_active" reste false —
@@ -37,7 +44,14 @@ export default async function handler(req, res) {
     // (type: 'subscription'), puis attendre la validation manuelle admin
     // via /api/payments/[id]/review.
     return res.status(201).json(shop);
-  }
+    }
 
-  return res.status(405).end();
+    res.setHeader('Allow', ['GET', 'POST']);
+    return res.status(405).json({ error: 'Méthode non autorisée' });
+  } catch (error) {
+    console.error('Erreur API /api/shops:', error);
+    return res.status(500).json({
+      error: error instanceof Error ? error.message : 'Erreur interne lors de la création de la boutique'
+    });
+  }
 }

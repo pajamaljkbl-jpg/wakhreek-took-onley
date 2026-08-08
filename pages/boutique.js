@@ -4,6 +4,19 @@ const BLUE = '#019EE5';
 const input = { width: '100%', padding: 12, marginBottom: 10, border: '1px solid #ddd', borderRadius: 12, boxSizing: 'border-box' };
 const button = { width: '100%', padding: 13, border: 0, borderRadius: 12, background: BLUE, color: 'white', fontWeight: 800, cursor: 'pointer' };
 
+async function readApiResponse(res) {
+  const text = await res.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    const detail = res.status === 404
+      ? 'Route API introuvable (404). Vérifie le dossier racine du projet sur Vercel.'
+      : `Le serveur a renvoyé une réponse invalide (${res.status}). Consulte les logs Vercel.`;
+    throw new Error(detail);
+  }
+}
+
 async function uploadImage(file, folder) {
   const imageBase64 = await new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -12,7 +25,7 @@ async function uploadImage(file, folder) {
     reader.readAsDataURL(file);
   });
   const res = await fetch('/api/uploads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64, folder }) });
-  const data = await res.json();
+  const data = await readApiResponse(res);
   if (!res.ok) throw new Error(data.error || 'Échec de l’envoi de l’image');
   return data.url;
 }
@@ -36,7 +49,7 @@ export default function Boutique() {
     try {
       const qr_code_url = qr ? await uploadImage(qr, 'qrcodes') : null;
       const res = await fetch('/api/shops', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, qr_code_url }) });
-      const data = await res.json();
+      const data = await readApiResponse(res);
       if (!res.ok) throw new Error(data.error || 'Création impossible');
       setShop(data); setMessage('Boutique créée. Il reste à envoyer la preuve de l’abonnement.');
     } catch (error) { setMessage(error.message); } finally { setBusy(false); }
@@ -48,7 +61,7 @@ export default function Boutique() {
     try {
       const proofImageUrl = await uploadImage(proof, 'proofs');
       const res = await fetch('/api/payments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'subscription', shopId: shop.id, proofImageUrl }) });
-      const data = await res.json();
+      const data = await readApiResponse(res);
       if (!res.ok) throw new Error(data.error || 'Preuve non envoyée');
       setMessage('Preuve envoyée. L’administrateur va valider ton abonnement.');
     } catch (error) { setMessage(error.message); } finally { setBusy(false); }
@@ -59,7 +72,7 @@ export default function Boutique() {
     try {
       const imageUrl = productImage ? await uploadImage(productImage, 'products') : null;
       const res = await fetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...product, shopId: shop.id, imageUrl }) });
-      const data = await res.json(); if (!res.ok) throw new Error(data.error || 'Produit non ajouté');
+      const data = await readApiResponse(res); if (!res.ok) throw new Error(data.error || 'Produit non ajouté');
       setMessage(`Produit « ${data.name} » ajouté à la boutique.`); setProduct({ name: '', description: '', category: 'Produits naturels', price: '', stock: '' }); setProductImage(null);
     } catch (error) { setMessage(error.message); } finally { setBusy(false); }
   }

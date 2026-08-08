@@ -74,6 +74,11 @@ export default function Home() {
   const [showBuyerProfile, setShowBuyerProfile] = useState(false);
   const [proofSubmitted, setProofSubmitted] = useState(false);
   const [submittingProof, setSubmittingProof] = useState(false);
+  const [paymentConfig, setPaymentConfig] = useState({ adminWaveNumber: '', adminWaveQrUrl: '' });
+
+  useEffect(() => {
+    fetch('/api/public-config').then((r) => r.json()).then(setPaymentConfig).catch(() => {});
+  }, []);
 
   async function handleProofUpload(e) {
     const file = e.target.files[0];
@@ -155,7 +160,7 @@ export default function Home() {
     <div style={{ minHeight: '100vh', background: '#fafafa', fontFamily: 'Inter,system-ui,sans-serif' }}>
       <div style={{ background: BLUE, color: 'white', padding: '12px 16px', display: 'flex', justifyContent: 'space-between' }}>
         <b>ONLY TOK - WAKH REEK</b>
-        <span onClick={() => setShowBuyerProfile(true)} style={{ cursor: 'pointer', textDecoration: 'underline' }}>{buyer.email}</span>
+        <div style={{ display: 'flex', gap: 12 }}><a href="/marche" style={{ color: 'white' }}>السوق</a><a href="/boutique" style={{ color: 'white' }}>Créer une boutique</a><span onClick={() => setShowBuyerProfile(true)} style={{ cursor: 'pointer', textDecoration: 'underline' }}>{buyer.email}</span></div>
       </div>
 
       <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: 12 }}>
@@ -205,8 +210,15 @@ export default function Home() {
               <p style={{ fontSize: 12, color: '#666' }}>Filtre les visiteurs sérieux avant de débloquer la messagerie.</p>
               {!proofSubmitted ? (
                 <>
+                  {paymentConfig.adminWaveQrUrl && (
+                    <img src={paymentConfig.adminWaveQrUrl} alt="QR code Wave Wakh Reek" style={{ width: 190, height: 190, objectFit: 'contain', borderRadius: 16, border: '1px solid #eee' }} />
+                  )}
+                  {paymentConfig.adminWaveNumber && <p><b>Numéro Wave : {paymentConfig.adminWaveNumber}</b></p>}
+                  {!paymentConfig.adminWaveQrUrl && !paymentConfig.adminWaveNumber && (
+                    <p style={{ color: '#e10600', fontWeight: 700 }}>Le moyen de paiement Wave doit être configuré par l’administrateur.</p>
+                  )}
                   <p style={{ fontSize: 13 }}>1. Paye 10F via le QR Wave de l'administrateur.<br />2. Envoie une capture de la preuve de paiement ci-dessous.</p>
-                  <input type="file" accept="image/*" onChange={handleProofUpload} disabled={submittingProof} />
+                  <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleProofUpload} disabled={submittingProof || (!paymentConfig.adminWaveQrUrl && !paymentConfig.adminWaveNumber)} />
                   {submittingProof && <p style={{ fontSize: 12, color: '#666' }}>Envoi en cours...</p>}
                 </>
               ) : (
