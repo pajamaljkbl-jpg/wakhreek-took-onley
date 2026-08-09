@@ -53,6 +53,9 @@ export default function Appel() {
   }
 
   async function createPeer(side, type) {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error('Ce navigateur ne permet pas le microphone ou la caméra. Ouvre Wakh Reek avec Firefox, Edge ou Chrome récent.');
+    }
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: type === 'video' });
     streamRef.current = stream;
     if (localVideo.current) localVideo.current.srcObject = stream;
@@ -89,7 +92,12 @@ export default function Appel() {
       peer.pendingCandidates = [];
       setCall(created);
       setMessage('Appel en cours… Le vendeur doit ouvrir cette discussion et accepter.');
-    } catch (error) { setMessage(error.message || 'Micro ou caméra non autorisé.'); closeLocalOnly(); }
+    } catch (error) {
+      const explanation = error?.name === 'NotAllowedError'
+        ? 'Autorise le microphone et la caméra dans Firefox, puis réessaie.'
+        : (error.message || 'Micro ou caméra non autorisé.');
+      setMessage(explanation); closeLocalOnly();
+    }
     finally { setBusy(false); }
   }
 
@@ -105,7 +113,12 @@ export default function Appel() {
       await peer.setLocalDescription(answer);
       const updated = await api({ action: 'answer', callId: call.id, signal: answer });
       setCall(updated); setMessage('Appel Wakh Reek connecté');
-    } catch (error) { setMessage(error.message || 'Impossible de répondre à cet appel.'); closeLocalOnly(); }
+    } catch (error) {
+      const explanation = error?.name === 'NotAllowedError'
+        ? 'Autorise le microphone et la caméra dans Firefox, puis réessaie.'
+        : (error.message || 'Impossible de répondre à cet appel.');
+      setMessage(explanation); closeLocalOnly();
+    }
     finally { setBusy(false); }
   }
 
@@ -166,6 +179,9 @@ export default function Appel() {
           <button disabled={busy} onClick={() => startCall('video')} style={button}>🎥 Démarrer un appel vidéo</button>
         </div>}
         {canAnswer && <button disabled={busy} onClick={answerCall} style={button}>✅ Accepter l’appel {call.call_type === 'video' ? 'vidéo' : 'audio'}</button>}
+        <div style={{ marginTop: 14, padding: '11px 13px', borderRadius: 12, background: '#e0f2fe', color: '#0c4a6e', fontWeight: 600 }}>
+          État de l’appel : {message}
+        </div>
         {peerRef.current && <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
           <button onClick={toggleMute} style={{ ...button, background: '#64748b' }}>{muted ? 'Activer micro' : 'Couper micro'}</button>
           {videoCall && <button onClick={toggleCamera} style={{ ...button, background: '#64748b' }}>{cameraOff ? 'Activer caméra' : 'Couper caméra'}</button>}
