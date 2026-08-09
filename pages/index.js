@@ -197,10 +197,15 @@ export default function Home() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#fafafa', fontFamily: 'Inter,system-ui,sans-serif' }}>
-      <div style={{ background: BLUE, color: 'white', padding: '12px 16px', display: 'flex', justifyContent: 'space-between' }}>
-        <b>ONLY TOK - WAKH REEK</b>
-        <div style={{ display: 'flex', gap: 12 }}><a href="/marche" style={{ color: 'white' }}>السوق</a><a href="/boutique" style={{ color: 'white' }}>Créer une boutique</a><a href="/vendeur" style={{ color: 'white' }}>Espace vendeur</a><span onClick={() => setShowBuyerProfile(true)} style={{ cursor: 'pointer', textDecoration: 'underline' }}>{buyer.email}</span></div>
-      </div>
+      <header style={{ background: BLUE, color: 'white', padding: '18px 16px 14px', textAlign: 'center' }}>
+        <a href="/" style={{ display: 'block', color: 'white', textDecoration: 'none', fontSize: 24, lineHeight: 1.1, fontWeight: 900, letterSpacing: '.2px' }}>
+          ONLY TOK – WAKH REEK
+        </a>
+        <nav style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 14 }}>
+          <a href="/boutique" style={{ color: 'white', fontWeight: 800, whiteSpace: 'nowrap' }}>Créer une boutique</a>
+          <a href="/vendeur" style={{ color: 'white', fontWeight: 800, whiteSpace: 'nowrap' }}>Espace vendeur</a>
+        </nav>
+      </header>
 
       <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: 12 }}>
         {VILLES.map((v) => (
