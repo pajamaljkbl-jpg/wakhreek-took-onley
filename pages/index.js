@@ -267,8 +267,7 @@ export default function Home() {
           ) : (
             <>
               <div style={{ display: 'flex', gap: 8, padding: '8px 12px', borderBottom: '1px solid #eee' }}>
-                <a href={`https://meet.jit.si/wakhreek-${conversation.id}#config.startAudioOnly=true`} target="_blank" rel="noreferrer" style={{ ...btnStyle, flex: 1, textDecoration: 'none', textAlign: 'center' }}>📞 Appel audio</a>
-                <a href={`https://meet.jit.si/wakhreek-${conversation.id}`} target="_blank" rel="noreferrer" style={{ ...btnStyle, flex: 1, textDecoration: 'none', textAlign: 'center' }}>🎥 Appel vidéo</a>
+                <a href={`/appel?conversationId=${conversation.id}`} style={{ ...btnStyle, flex: 1, textDecoration: 'none', textAlign: 'center' }}>📞 Appel Wakh Reek</a>
               </div>
               <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
                 {messages.map((m) => (
