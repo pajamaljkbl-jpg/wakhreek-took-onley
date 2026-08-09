@@ -29,12 +29,21 @@ export default async function handler(req, res) {
     // l'envoi de messages — sinon on recrée la faille du bouton "j'ai payé".
     const { data: conv } = await supabaseAdmin
       .from('conversations')
-      .select('entry_fee_paid')
+      .select('entry_fee_paid, shop_id')
       .eq('id', conversationId)
       .single();
 
     if (!conv?.entry_fee_paid) {
       return res.status(403).json({ error: 'Paiement des 10F requis avant de pouvoir écrire' });
+    }
+
+    // Une réponse "shop" est réservée au propriétaire connecté de la boutique.
+    if (sender === 'shop') {
+      const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+      const { data: authData, error: authError } = token ? await supabaseAdmin.auth.getUser(token) : { data: null, error: true };
+      if (authError || !authData?.user) return res.status(401).json({ error: 'Connexion vendeur requise' });
+      const { data: shop } = await supabaseAdmin.from('shops').select('id').eq('id', conv.shop_id).eq('owner_id', authData.user.id).maybeSingle();
+      if (!shop) return res.status(403).json({ error: 'Cette boutique ne t’appartient pas' });
     }
 
     const { data, error } = await supabaseAdmin

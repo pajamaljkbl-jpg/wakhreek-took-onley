@@ -25,7 +25,7 @@ export default function Compte() {
           options: { data: { full_name: name, role } },
         });
         if (error) throw error;
-        if (data.session) window.location.href = role === 'seller' ? '/boutique' : '/';
+        if (data.session) window.location.href = role === 'seller' ? '/vendeur' : '/';
         else setMessage('Compte créé. Vérifie ton e-mail puis connecte-toi.');
       } else {
         const { error } = await supabaseBrowser.auth.signInWithPassword({ email, password });

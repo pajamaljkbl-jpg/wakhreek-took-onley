@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { getSupabaseBrowser } from '../lib/supabase-browser';
 
 const BLUE = '#019EE5';
 const input = { width: '100%', padding: 12, marginBottom: 10, border: '1px solid #ddd', borderRadius: 12, boxSizing: 'border-box' };
@@ -48,7 +49,10 @@ export default function Boutique() {
     e.preventDefault(); setBusy(true); setMessage('');
     try {
       const qr_code_url = qr ? await uploadImage(qr, 'qrcodes') : null;
-      const res = await fetch('/api/shops', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, qr_code_url }) });
+      const { data: { session } } = await getSupabaseBrowser().auth.getSession();
+      const headers = { 'Content-Type': 'application/json' };
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+      const res = await fetch('/api/shops', { method: 'POST', headers, body: JSON.stringify({ ...form, qr_code_url }) });
       const data = await readApiResponse(res);
       if (!res.ok) throw new Error(data.error || 'Création impossible');
       setShop(data); setMessage('Boutique créée. Il reste à envoyer la preuve de l’abonnement.');

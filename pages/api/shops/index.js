@@ -21,9 +21,11 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Nom, ville et numéro Wave sont obligatoires' });
     }
 
+    const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+    const { data: authData } = token ? await supabaseAdmin.auth.getUser(token) : { data: null };
     const { data: shop, error } = await supabaseAdmin
       .from('shops')
-      .insert({ name, city, quartier, category, wave_number, om_number, qr_code_url, latitude, longitude, description })
+      .insert({ name, city, quartier, category, wave_number, om_number, qr_code_url, latitude, longitude, description, owner_id: authData?.user?.id || null })
       .select()
       .single();
 

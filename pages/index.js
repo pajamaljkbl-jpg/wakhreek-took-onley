@@ -199,7 +199,7 @@ export default function Home() {
     <div style={{ minHeight: '100vh', background: '#fafafa', fontFamily: 'Inter,system-ui,sans-serif' }}>
       <div style={{ background: BLUE, color: 'white', padding: '12px 16px', display: 'flex', justifyContent: 'space-between' }}>
         <b>ONLY TOK - WAKH REEK</b>
-        <div style={{ display: 'flex', gap: 12 }}><a href="/marche" style={{ color: 'white' }}>السوق</a><a href="/boutique" style={{ color: 'white' }}>Créer une boutique</a><span onClick={() => setShowBuyerProfile(true)} style={{ cursor: 'pointer', textDecoration: 'underline' }}>{buyer.email}</span></div>
+        <div style={{ display: 'flex', gap: 12 }}><a href="/marche" style={{ color: 'white' }}>السوق</a><a href="/boutique" style={{ color: 'white' }}>Créer une boutique</a><a href="/vendeur" style={{ color: 'white' }}>Espace vendeur</a><span onClick={() => setShowBuyerProfile(true)} style={{ cursor: 'pointer', textDecoration: 'underline' }}>{buyer.email}</span></div>
       </div>
 
       <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: 12 }}>
