@@ -19,10 +19,11 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const { conversationId, sender, content } = req.body;
-    if (!conversationId || !sender || !content) {
-      return res.status(400).json({ error: 'conversationId, sender et content requis' });
+    const { conversationId, sender, content, type = 'text', mediaUrl, durationSeconds } = req.body;
+    if (!conversationId || !sender || (!content && !mediaUrl)) {
+      return res.status(400).json({ error: 'conversationId, sender et contenu requis' });
     }
+    if (!['text', 'image', 'audio'].includes(type)) return res.status(400).json({ error: 'Type de message invalide' });
 
     // On vérifie que le "10F" d'entrée a bien été payé avant d'autoriser
     // l'envoi de messages — sinon on recrée la faille du bouton "j'ai payé".
@@ -38,7 +39,7 @@ export default async function handler(req, res) {
 
     const { data, error } = await supabaseAdmin
       .from('messages')
-      .insert({ conversation_id: conversationId, sender, content })
+      .insert({ conversation_id: conversationId, sender, content: content || '', message_type: type, media_url: mediaUrl || null, duration_seconds: Number(durationSeconds) || null })
       .select()
       .single();
 

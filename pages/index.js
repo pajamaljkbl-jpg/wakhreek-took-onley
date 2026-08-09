@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const VILLES = [
   'Toutes Villes', 'Dakar', 'Pikine-Guédiawaye', 'Thiès', 'Mbour', 'Saint-Louis',
@@ -24,6 +24,8 @@ export default function Home() {
   const [conversation, setConversation] = useState(null);
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
+  const [recording, setRecording] = useState(false);
+  const recorderRef = useRef(null);
 
   // Charge les boutiques depuis l'API à chaque changement de ville
   useEffect(() => {
@@ -139,6 +141,42 @@ export default function Home() {
     setMessages(updated);
   }
 
+  async function uploadMedia(file, folder) {
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file);
+    });
+    const res = await fetch('/api/uploads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileBase64: dataUrl, folder }) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Envoi du média impossible');
+    return data.url;
+  }
+
+  async function sendMedia(file, type, durationSeconds) {
+    try {
+      const url = await uploadMedia(file, type === 'audio' ? 'messages/audio' : 'messages/images');
+      const res = await fetch('/api/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ conversationId: conversation.id, sender: 'buyer', type, mediaUrl: url, durationSeconds }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Message impossible à envoyer');
+      setMessages((items) => [...items, data]);
+    } catch (error) { alert(error.message); }
+  }
+
+  async function toggleRecording() {
+    if (recording) return recorderRef.current?.stop();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks = []; const startedAt = Date.now();
+      recorder.ondataavailable = (event) => event.data.size && chunks.push(event.data);
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop()); setRecording(false);
+        const file = new File([new Blob(chunks, { type: recorder.mimeType || 'audio/webm' })], 'message.webm', { type: recorder.mimeType || 'audio/webm' });
+        await sendMedia(file, 'audio', Math.ceil((Date.now() - startedAt) / 1000));
+      };
+      recorder.start(); recorderRef.current = recorder; setRecording(true);
+    } catch { alert('Autorise le microphone pour enregistrer un message vocal.'); }
+  }
+
   // --- Écran d'inscription (remplace le localStorage) ---
   if (!buyer) {
     return (
@@ -236,13 +274,17 @@ export default function Home() {
                 {messages.map((m) => (
                   <div key={m.id} style={{ textAlign: m.sender === 'buyer' ? 'right' : 'left', margin: '6px 0' }}>
                     <span style={{ display: 'inline-block', background: m.sender === 'buyer' ? BLUE : '#eee', color: m.sender === 'buyer' ? 'white' : 'black', padding: '8px 12px', borderRadius: 14, maxWidth: '75%' }}>
+                      {m.message_type === 'image' && <img src={m.media_url} alt="Image envoyée" style={{ display: 'block', maxWidth: 230, borderRadius: 10 }} />}
+                      {m.message_type === 'audio' && <audio controls src={m.media_url} style={{ maxWidth: 230 }} />}
                       {m.content}
                     </span>
                   </div>
                 ))}
               </div>
               <div style={{ display: 'flex', padding: 10, borderTop: '1px solid #eee' }}>
+                <label title="Envoyer une image" style={{ cursor: 'pointer', padding: '8px 10px', fontSize: 21 }}>🖼️<input type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(e) => e.target.files[0] && sendMedia(e.target.files[0], 'image')} /></label>
                 <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage()} placeholder="Écrire..." style={{ ...inputStyle, flex: 1 }} />
+                <button onClick={toggleRecording} title="Message vocal" style={{ ...btnStyle, marginLeft: 8, width: 'auto', padding: '0 13px', background: recording ? '#dc2626' : '#64748b' }}>{recording ? '■' : '🎤'}</button>
                 <button onClick={sendMessage} style={{ ...btnStyle, marginLeft: 8, width: 'auto', padding: '0 16px' }}>Envoyer</button>
               </div>
             </>

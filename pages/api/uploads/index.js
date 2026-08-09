@@ -11,12 +11,16 @@ export const config = {
   },
 };
 
-const BUCKET = 'public';
+const BUCKET = 'wakhreek-images';
 const ALLOWED_TYPES = new Set([
   'image/jpeg',
   'image/png',
   'image/webp',
   'image/gif',
+  'audio/webm',
+  'audio/ogg',
+  'audio/mpeg',
+  'audio/mp4',
 ]);
 
 const EXTENSIONS = {
@@ -24,6 +28,10 @@ const EXTENSIONS = {
   'image/png': 'png',
   'image/webp': 'webp',
   'image/gif': 'gif',
+  'audio/webm': 'webm',
+  'audio/ogg': 'ogg',
+  'audio/mpeg': 'mp3',
+  'audio/mp4': 'm4a',
 };
 
 function safeFolder(value) {
@@ -43,20 +51,21 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { imageBase64, folder } = req.body || {};
+    const { imageBase64, fileBase64, folder } = req.body || {};
+    const source = fileBase64 || imageBase64;
 
-    if (!imageBase64 || typeof imageBase64 !== 'string') {
-      return res.status(400).json({ error: 'imageBase64 est obligatoire' });
+    if (!source || typeof source !== 'string') {
+      return res.status(400).json({ error: 'Fichier obligatoire' });
     }
 
-    // Accepte uniquement un Data URL image.
-    const match = imageBase64.match(
-      /^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=\s]+)$/
+    // Accepte uniquement un Data URL image ou audio.
+    const match = source.match(
+      /^data:((?:image\/(?:jpeg|png|webp|gif)|audio\/(?:webm|ogg|mpeg|mp4)));base64,([A-Za-z0-9+/=\s]+)$/
     );
 
     if (!match) {
       return res.status(400).json({
-        error: 'Format image invalide. JPEG, PNG, WebP ou GIF uniquement.',
+        error: 'Format invalide. Image JPEG/PNG/WebP/GIF ou audio WebM/OGG/MP3 uniquement.',
       });
     }
 
@@ -65,16 +74,16 @@ export default async function handler(req, res) {
     const buffer = Buffer.from(base64, 'base64');
 
     if (!buffer.length) {
-      return res.status(400).json({ error: 'Image vide' });
+      return res.status(400).json({ error: 'Fichier vide' });
     }
 
     // Limite applicative : 4.5 MB de fichier environ.
     if (buffer.length > 4.5 * 1024 * 1024) {
-      return res.status(413).json({ error: 'Image trop volumineuse (maximum 4,5 Mo)' });
+      return res.status(413).json({ error: 'Fichier trop volumineux (maximum 4,5 Mo)' });
     }
 
     if (!ALLOWED_TYPES.has(contentType)) {
-      return res.status(400).json({ error: 'Type d’image non autorisé' });
+      return res.status(400).json({ error: 'Type de fichier non autorisé' });
     }
 
     const extension = EXTENSIONS[contentType];
@@ -92,7 +101,7 @@ export default async function handler(req, res) {
     if (uploadError) {
       console.error('Supabase Storage upload error:', uploadError);
       return res.status(500).json({
-        error: 'Impossible d’enregistrer l’image dans Supabase Storage',
+        error: 'Impossible d’enregistrer le fichier dans Supabase Storage',
       });
     }
 
