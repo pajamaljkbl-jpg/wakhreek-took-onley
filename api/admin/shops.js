@@ -1,4 +1,4 @@
-import { assertSupabaseConfigured } from '../../../lib/supabase';
+import { assertSupabaseConfigured } from '../../lib/supabase';';
 
 function isAdmin(req) {
   return Boolean(process.env.ADMIN_SECRET) && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
