@@ -1,5 +1,5 @@
-import { assertSupabaseConfigured } from '../../../../lib/supabase';
-import { jsonError, requireUser } from '../../../../lib/require-user';
+import { assertSupabaseConfigured } from '../../../lib/supabase';
+import { jsonError, requireUser } from '../../../lib/require-user';
 
 export default async function handler(req, res) {
   try {
