@@ -44,7 +44,8 @@ export default async function handler(req, res) {
     // Note: la boutique est créée mais "subscription_active" reste false —
     // il faut envoyer une preuve de paiement via POST /api/payments
     // (type: 'subscription'), puis attendre la validation manuelle admin
-    // via /api/payments/[id]/review.const ownerEmail = authData?.user?.email;
+    // // via /api/payments/[id]/review.
+const ownerEmail = authData?.user?.email;;
 const adminEmail = process.env.ADMIN_EMAIL;
 
 const emails = [];
