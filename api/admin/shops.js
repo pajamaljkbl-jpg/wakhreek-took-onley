@@ -1,10 +1,10 @@
-import { assertSupabaseConfigured } from '../../lib/supabase';';
+const { assertSupabaseConfigured } = require('../../lib/supabase');
 
 function isAdmin(req) {
   return Boolean(process.env.ADMIN_SECRET) && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
 }
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (!isAdmin(req)) return res.status(401).json({ error: 'Non autorisé' });
 
   let supabaseAdmin;
