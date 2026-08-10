@@ -21,6 +21,9 @@ const ALLOWED_TYPES = new Set([
   'audio/ogg',
   'audio/mpeg',
   'audio/mp4',
+  'video/webm',
+  'video/mp4',
+  'video/quicktime',
 ]);
 
 const EXTENSIONS = {
@@ -32,6 +35,9 @@ const EXTENSIONS = {
   'audio/ogg': 'ogg',
   'audio/mpeg': 'mp3',
   'audio/mp4': 'm4a',
+  'video/webm': 'webm',
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
 };
 
 function safeFolder(value) {
@@ -58,14 +64,14 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Fichier obligatoire' });
     }
 
-    // Accepte uniquement un Data URL image ou audio.
+    // Accepte uniquement un Data URL image, audio ou courte vidéo.
     const match = source.match(
-      /^data:((?:image\/(?:jpeg|png|webp|gif)|audio\/(?:webm|ogg|mpeg|mp4)));base64,([A-Za-z0-9+/=\s]+)$/
+      /^data:((?:image\/(?:jpeg|png|webp|gif)|audio\/(?:webm|ogg|mpeg|mp4)|video\/(?:webm|mp4|quicktime)));base64,([A-Za-z0-9+/=\s]+)$/
     );
 
     if (!match) {
       return res.status(400).json({
-        error: 'Format invalide. Image JPEG/PNG/WebP/GIF ou audio WebM/OGG/MP3 uniquement.',
+        error: 'Format invalide. Image, audio ou vidéo WebM/MP4 courte uniquement.',
       });
     }
 
@@ -77,7 +83,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Fichier vide' });
     }
 
-    // Limite applicative : 4.5 MB de fichier environ.
+    // Limite applicative : compatible avec le traitement Vercel par Data URL.
     if (buffer.length > 4.5 * 1024 * 1024) {
       return res.status(413).json({ error: 'Fichier trop volumineux (maximum 4,5 Mo)' });
     }

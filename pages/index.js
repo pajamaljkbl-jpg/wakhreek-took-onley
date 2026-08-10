@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { getSupabaseBrowser } from '../lib/supabase-browser';
 
 const VILLES = [
   'Toutes Villes', 'Dakar', 'Pikine-Guédiawaye', 'Thiès', 'Mbour', 'Saint-Louis',
@@ -13,6 +14,7 @@ export default function Home() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [signupError, setSignupError] = useState('');
+  const [authSession, setAuthSession] = useState(null);
 
   // --- Boutiques (remplace le tableau codé en dur) ---
   const [ville, setVille] = useState('Dakar');
@@ -26,6 +28,23 @@ export default function Home() {
   const [text, setText] = useState('');
   const [recording, setRecording] = useState(false);
   const recorderRef = useRef(null);
+
+  // Une session Supabase persiste dans le navigateur : l'utilisateur connecté
+  // revient directement dans Wakh Reek sans ressaisir son mot de passe.
+  useEffect(() => {
+    const client = getSupabaseBrowser();
+    client.auth.getSession().then(async ({ data }) => {
+      const session = data.session;
+      setAuthSession(session);
+      if (!session) return;
+      const { data: profile } = await client.from('profiles').select('phone').eq('id', session.user.id).maybeSingle();
+      if (!profile?.phone) return;
+      const res = await fetch('/api/buyers', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ email: session.user.email, phone: profile.phone }) });
+      if (res.ok) setBuyer(await res.json());
+    });
+    const { data: listener } = client.auth.onAuthStateChange((_event, session) => setAuthSession(session));
+    return () => listener.subscription.unsubscribe();
+  }, []);
 
   // Charge les boutiques depuis l'API à chaque changement de ville
   useEffect(() => {
@@ -186,10 +205,8 @@ export default function Home() {
           <h1 style={{ textAlign: 'center', fontWeight: 900 }}>ONLY TOK<br /><span style={{ color: BLUE }}>WAKH REEK</span></h1>
           <p style={{ textAlign: 'center', fontSize: 12, color: '#8aa0b5', margin: '12px 0 20px' }}>Inscris-toi pour accéder aux boutiques et à la messagerie.</p>
           <a href="/compte" style={{ display: 'block', textAlign: 'center', color: BLUE, marginBottom: 14, fontWeight: 700 }}>Créer un compte sécurisé ou se connecter</a>
-          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="ton@email.com" style={inputStyle} />
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="77 123 45 67" style={{ ...inputStyle, marginTop: 12 }} />
-          {signupError && <div style={{ color: '#e10600', fontSize: 12, marginTop: 8 }}>{signupError}</div>}
-          <button onClick={handleSignup} style={{ ...btnStyle, marginTop: 16 }}>S'inscrire</button>
+          <p style={{ color: '#657080', textAlign: 'center', fontSize: 14 }}>Inscription avec e-mail et téléphone obligatoire. Une fois connecté, ton compte reste ouvert sur cet appareil.</p>
+          <a href="/compte" style={{ ...btnStyle, display: 'block', textAlign: 'center', textDecoration: 'none', marginTop: 16 }}>S’inscrire / Se connecter</a>
         </div>
       </div>
     );
@@ -203,6 +220,7 @@ export default function Home() {
         </a>
         <nav style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 14 }}>
           <a href="/boutique" style={{ color: 'white', fontWeight: 800, whiteSpace: 'nowrap' }}>Créer une boutique</a>
+          <a href="/membres" style={{ color: 'white', fontWeight: 800, whiteSpace: 'nowrap' }}>Membres</a>
           <a href="/vendeur" style={{ color: 'white', fontWeight: 800, whiteSpace: 'nowrap' }}>Espace vendeur</a>
         </nav>
       </header>
