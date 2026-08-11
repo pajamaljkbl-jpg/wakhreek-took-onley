@@ -1,6 +1,26 @@
+import { useEffect } from 'react';
+import Head from 'next/head';
+
 export default function App({ Component, pageProps }) {
-  return <><style jsx global>{`
-    html, body, #__next { margin: 0; width: 100%; min-height: 100%; max-width: 100%; overflow-x: hidden; }
-    *, *::before, *::after { box-sizing: border-box; }
-  `}</style><Component {...pageProps} /></>;
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
+  }, []);
+
+  return (
+    <>
+      <Head>
+        <meta name="theme-color" content="#019EE5" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="icon" href="/icon.svg" />
+        <link rel="apple-touch-icon" href="/icon.svg" />
+      </Head>
+
+      <Component {...pageProps} />
+    </>
+  );
 }
