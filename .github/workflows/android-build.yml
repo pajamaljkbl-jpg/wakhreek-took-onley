@@ -1,0 +1,56 @@
+name: Build Wakhreek Android
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'capacitor.config.json'
+      - '.github/workflows/android-build.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Wakhreek dependencies
+        run: npm ci
+
+      - name: Install Android packaging tools
+        run: npm install --no-save @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest
+
+      - name: Create and sync Android project
+        run: |
+          npx cap add android
+          npx cap sync android
+
+      - name: Build test APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Build Android App Bundle
+        working-directory: android
+        run: ./gradlew bundleRelease --no-daemon
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wakhreek-android-build
+          path: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+            android/app/build/outputs/bundle/release/app-release.aab
