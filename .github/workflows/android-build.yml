@@ -5,6 +5,8 @@ on:
   push:
     branches: [main]
     paths:
+      - 'package.json'
+      - 'package-lock.json'
       - 'capacitor.config.json'
       - '.github/workflows/android-build.yml'
 
@@ -31,8 +33,10 @@ jobs:
       - name: Install Wakhreek dependencies
         run: npm ci
 
-      - name: Install Android packaging tools
-        run: npm install --no-save @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest
+      - name: Verify Capacitor versions
+        run: |
+          npm ls @capacitor/core @capacitor/cli @capacitor/android
+          npx cap --version
 
       - name: Create and sync Android project
         run: |
