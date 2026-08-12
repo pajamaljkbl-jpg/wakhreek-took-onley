@@ -9,7 +9,8 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'capacitor.config.json'
-      - 'assets/**'
+      - 'assets/icon-only.png'
+      - 'assets/splash.png'
       - 'public/manifest.json'
       - '.github/workflows/android-build.yml'
 
@@ -28,7 +29,7 @@ jobs:
           cache: npm
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
@@ -48,6 +49,8 @@ jobs:
 
       - name: Apply official Wakhreek Android icon and splash
         run: |
+          test -f assets/icon-only.png
+          test -f assets/splash.png
           sudo apt-get update
           sudo apt-get install -y imagemagick
           for spec in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
