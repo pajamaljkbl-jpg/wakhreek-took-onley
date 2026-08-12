@@ -1,3 +1,4 @@
+# Clean rebuild trigger after package-lock regeneration
 name: Build Wakhreek Android
 
 on:
