@@ -9,6 +9,8 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'capacitor.config.json'
+      - 'assets/**'
+      - 'public/manifest.json'
       - '.github/workflows/android-build.yml'
 
 jobs:
@@ -43,6 +45,22 @@ jobs:
         run: |
           npx cap add android
           npx cap sync android
+
+      - name: Apply official Wakhreek Android icon and splash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
+          for spec in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
+            density="${spec%%:*}"
+            size="${spec##*:}"
+            dir="android/app/src/main/res/mipmap-${density}"
+            mkdir -p "$dir"
+            convert assets/icon-only.png -resize "${size}x${size}" "$dir/ic_launcher.png"
+            convert assets/icon-only.png -resize "${size}x${size}" "$dir/ic_launcher_round.png"
+            convert assets/icon-only.png -resize "${size}x${size}" "$dir/ic_launcher_foreground.png"
+          done
+          mkdir -p android/app/src/main/res/drawable
+          convert assets/splash.png -resize 2732x2732 android/app/src/main/res/drawable/splash.png
 
       - name: Build test APK
         working-directory: android
