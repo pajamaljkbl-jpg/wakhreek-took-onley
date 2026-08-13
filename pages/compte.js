@@ -14,7 +14,13 @@ export default function Compte() {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+async function forgotPassword() {
+  ...
+}
 
+async function submit(e) {
+  ...
+}
   async function submit(e) {
     e.preventDefault();
     setBusy(true); setMessage('');
