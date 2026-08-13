@@ -20,7 +20,7 @@ async function submit(e) {
   ...
 
     setBusy(true); setMessage('');
-    try {
+   
       const supabaseBrowser = getSupabaseBrowser();
       if (mode === 'signup') {
         if (phone.replace(/\D/g, '').length < 8) throw new Error('Entre un numéro de téléphone valide.');
