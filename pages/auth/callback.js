@@ -7,25 +7,38 @@ export default function AuthCallback() {
   const [message, setMessage] = useState('Confirmation en cours…');
 
   useEffect(() => {
-    if (!router.isReady) return;
-
     async function finishConfirmation() {
       try {
-        const code =
-          typeof router.query.code === 'string'
-            ? router.query.code
-            : null;
+        const hash = new URLSearchParams(
+          window.location.hash.replace(/^#/, '')
+        );
 
-        if (!code) {
-          throw new Error('Code de confirmation manquant.');
+        const errorDescription = hash.get('error_description');
+
+        if (errorDescription) {
+          throw new Error(
+            decodeURIComponent(errorDescription.replace(/\+/g, ' '))
+          );
         }
 
         const supabase = getSupabaseBrowser();
 
-        const { error } =
-          await supabase.auth.exchangeCodeForSession(code);
+        // Supabase JS récupère automatiquement la session
+        // depuis #access_token / #refresh_token.
+        await new Promise((resolve) => setTimeout(resolve, 700));
+
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
 
         if (error) throw error;
+
+        if (!session) {
+          throw new Error(
+            'Confirmation reçue, mais aucune session n’a été créée.'
+          );
+        }
 
         router.replace('/');
       } catch (error) {
@@ -36,7 +49,7 @@ export default function AuthCallback() {
     }
 
     finishConfirmation();
-  }, [router.isReady, router.query.code]);
+  }, [router]);
 
   return (
     <main
@@ -45,6 +58,8 @@ export default function AuthCallback() {
         display: 'grid',
         placeItems: 'center',
         fontFamily: 'Inter,system-ui,sans-serif',
+        padding: 20,
+        textAlign: 'center',
       }}
     >
       <p>{message}</p>
