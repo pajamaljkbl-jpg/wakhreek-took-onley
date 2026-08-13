@@ -26,7 +26,10 @@ export default function Compte() {
         const { data, error } = await supabaseBrowser.auth.signUp({
           email,
           password,
-          options: { data: { full_name: name, role, phone } },
+         options: {
+  emailRedirectTo: 'https://wakhreek.com/auth/callback',
+  data: { full_name: name, role, phone },
+},
         });
         if (error) throw error;
         if (data.user) {
