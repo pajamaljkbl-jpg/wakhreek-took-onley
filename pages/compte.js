@@ -15,12 +15,31 @@ export default function Compte() {
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
 
+  async function forgotPassword() {
+    if (!email) {
+      setMessage('Entre d’abord ton adresse e-mail.');
+      return;
+    }
+    setBusy(true);
+    setMessage('');
+    try {
+      const supabaseBrowser = getSupabaseBrowser();
+      const { error } = await supabaseBrowser.auth.resetPasswordForEmail(email, {
+        redirectTo: 'https://wakhreek.com/reset-password',
+      });
+      if (error) throw error;
+      setMessage('Lien de réinitialisation envoyé. Vérifie ta boîte e-mail.');
+    } catch (error) {
+      setMessage(error.message || 'Impossible d’envoyer le lien de réinitialisation.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function submit(e) {
     e.preventDefault();
     setBusy(true);
     setMessage('');
-
     try {
       const supabaseBrowser = getSupabaseBrowser();
       if (mode === 'signup') {
@@ -29,10 +48,10 @@ export default function Compte() {
         const { data, error } = await supabaseBrowser.auth.signUp({
           email,
           password,
-         options: {
-  emailRedirectTo: 'https://wakhreek.com/auth/callback',
-  data: { full_name: name, role, phone },
-},
+          options: {
+            emailRedirectTo: 'https://wakhreek.com/auth/callback',
+            data: { full_name: name, role, phone },
+          },
         });
         if (error) throw error;
         if (data.user) {
@@ -63,6 +82,7 @@ export default function Compte() {
           <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, margin: '4px 0 14px', color: '#3d4856' }}><input type="checkbox" checked={acceptTerms} onChange={(e) => setAcceptTerms(e.target.checked)} required /> <span>J’accepte les règles de Wakh Reek : respect des personnes, pas de fraude, pas de contenu illégal ou nuisible. Les signalements sont examinés par un administrateur.</span></label></>}
         <input style={field} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-mail" required />
         <input style={field} type="password" minLength="6" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mot de passe (6 caractères minimum)" required />
+        {mode === 'login' && <button type="button" onClick={forgotPassword} disabled={busy} style={{ display: 'block', margin: '-2px 0 14px auto', border: 0, background: 'transparent', color: BLUE, fontWeight: 700, cursor: 'pointer' }}>Mot de passe oublié ?</button>}
         <button disabled={busy} style={{ width: '100%', padding: 13, border: 0, borderRadius: 12, background: BLUE, color: 'white', fontWeight: 800, fontSize: 16 }}>{busy ? 'Patiente…' : mode === 'login' ? 'Se connecter' : 'Créer mon compte'}</button>
       </form>
       {message && <p style={{ padding: 12, background: '#eef8ff', borderRadius: 10 }}>{message}</p>}
