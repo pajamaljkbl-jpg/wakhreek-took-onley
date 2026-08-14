@@ -19,7 +19,7 @@ export default async function handler(req, res) {
         .or(`member_one_id.eq.${user.id},member_two_id.eq.${user.id}`).order('updated_at', { ascending: false });
       if (error) throw error;
       const partnerIds = (data || []).map((row) => row.member_one_id === user.id ? row.member_two_id : row.member_one_id);
-      const { data: profiles } = partnerIds.length ? await supabase.from('profiles').select('id, full_name, phone').in('id', partnerIds) : { data: [] };
+      const { data: profiles } = partnerIds.length ? await supabase.from('profiles').select('id, full_name, phone, avatar_url').in('id', partnerIds) : { data: [] };
       const byId = Object.fromEntries((profiles || []).map((p) => [p.id, p]));
       return res.status(200).json((data || []).map((row) => ({ ...row, partner: byId[row.member_one_id === user.id ? row.member_two_id : row.member_one_id] || null })));
     }
