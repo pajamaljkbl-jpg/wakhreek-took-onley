@@ -20,7 +20,43 @@ export default async function handler(req, res) {
     const user = await requireUser(req);
 
     if (req.method === 'GET') {
-      const { conversationId } = req.query;
+      const { conversationId, incoming } = req.query;
+
+      if (incoming === '1') {
+        const { data: conversations, error: convError } = await supabaseAdmin
+          .from('member_conversations')
+          .select('id, member_one_id, member_two_id')
+          .or(`member_one_id.eq.${user.id},member_two_id.eq.${user.id}`);
+        if (convError) throw convError;
+        const ids = (conversations || []).map((row) => row.id);
+        if (!ids.length) return res.status(200).json(null);
+
+        const { data: ringing, error: ringingError } = await supabaseAdmin
+          .from(CALL_TABLE)
+          .select('*')
+          .in('conversation_id', ids)
+          .eq('status', 'ringing')
+          .neq('caller_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (ringingError) throw ringingError;
+        if (!ringing) return res.status(200).json(null);
+
+        const conv = (conversations || []).find((row) => row.id === ringing.conversation_id);
+        const callerId = ringing.caller_id || (conv?.member_one_id === user.id ? conv?.member_two_id : conv?.member_one_id);
+        let caller = null;
+        if (callerId) {
+          const { data: profile } = await supabaseAdmin
+            .from('profiles')
+            .select('id, full_name, phone, avatar_url')
+            .eq('id', callerId)
+            .maybeSingle();
+          caller = profile || null;
+        }
+        return res.status(200).json({ ...ringing, caller });
+      }
+
       if (!conversationId) return res.status(400).json({ error: 'conversationId requis' });
       if (!(await authorizedConversation(conversationId, user.id))) return res.status(403).json({ error: 'Conversation non autorisée' });
       const { data, error } = await supabaseAdmin
@@ -41,10 +77,13 @@ export default async function handler(req, res) {
 
     if (action === 'start') {
       if (!signal || !['audio', 'video'].includes(callType)) return res.status(400).json({ error: 'Signal ou type d’appel invalide' });
-      await supabaseAdmin.from(CALL_TABLE).update({ status: 'ended', ended_at: new Date().toISOString() }).eq('conversation_id', conversationId).in('status', ['ringing', 'connected']);
+      await supabaseAdmin.from(CALL_TABLE)
+        .update({ status: 'ended', ended_at: new Date().toISOString() })
+        .eq('conversation_id', conversationId)
+        .in('status', ['ringing', 'connected']);
       const { data, error } = await supabaseAdmin
         .from(CALL_TABLE)
-        .insert({ conversation_id: conversationId, call_type: callType, offer: signal, status: 'ringing' })
+        .insert({ conversation_id: conversationId, caller_id: user.id, call_type: callType, offer: signal, status: 'ringing' })
         .select()
         .single();
       if (error) throw error;
@@ -58,6 +97,7 @@ export default async function handler(req, res) {
 
     if (action === 'answer') {
       if (!signal) return res.status(400).json({ error: 'Réponse invalide' });
+      if (call.caller_id === user.id) return res.status(400).json({ error: 'Le correspondant doit répondre à cet appel' });
       const { data, error } = await supabaseAdmin.from(CALL_TABLE)
         .update({ answer: signal, status: 'connected', answered_at: new Date().toISOString() })
         .eq('id', call.id).select().single();
