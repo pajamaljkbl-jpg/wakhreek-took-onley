@@ -11,6 +11,8 @@ export default function Membres() {
   const [query, setQuery] = useState(''); const [results, setResults] = useState([]); const [contacts, setContacts] = useState([]);
   const [conversations, setConversations] = useState([]); const [active, setActive] = useState(null); const [messages, setMessages] = useState([]); const [text, setText] = useState('');
   const [error, setError] = useState(''); const recorderRef = useRef(null); const [recording, setRecording] = useState(false);
+  const [incomingCall, setIncomingCall] = useState(null); const [notificationsReady, setNotificationsReady] = useState(false);
+  const ringTimerRef = useRef(null); const audioContextRef = useRef(null); const notifiedCallRef = useRef(null);
   const auth = () => ({ Authorization: `Bearer ${session?.access_token}` });
   async function api(path, options = {}) { const r = await fetch(path, { ...options, headers: { ...auth(), ...(options.headers || {}) } }); const data = await r.json().catch(() => ({})); if (!r.ok) throw new Error(data.error || 'Erreur'); return data; }
   async function refresh() { if (!session) return; try { const [profile, list, saved] = await Promise.all([api('/api/members'), api('/api/member-conversations'), api('/api/members/contacts')]); setMe(profile); setConversations(list); setContacts(saved); } catch (e) { setError(e.message); } }
@@ -18,6 +20,62 @@ export default function Membres() {
   useEffect(() => { refresh(); }, [session]);
   useEffect(() => { if (!active || !session) return; const load = () => api(`/api/member-messages?conversationId=${active.id}`).then(setMessages).catch((e) => setError(e.message)); load(); const t = setInterval(load, 3000); return () => clearInterval(t); }, [active, session]);
   useEffect(() => { const t = setTimeout(async () => { if (query.trim().length < 3 || !session) return setResults([]); try { setResults(await api(`/api/members/search?q=${encodeURIComponent(query.trim())}`)); } catch (e) { setError(e.message); } }, 350); return () => clearTimeout(t); }, [query, session]);
+
+  useEffect(() => {
+    if (!session) return;
+    let alive = true;
+    async function checkIncoming() {
+      try {
+        const call = await api('/api/calls?incoming=1');
+        if (!alive) return;
+        setIncomingCall(call || null);
+        if (call?.id && notifiedCallRef.current !== call.id) {
+          notifiedCallRef.current = call.id;
+          startRinging();
+          try { navigator.vibrate?.([500, 250, 500, 250, 900]); } catch {}
+          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            const callerName = call.caller?.full_name || call.caller?.phone || 'Membre Wakh Reek';
+            const notification = new Notification(call.call_type === 'video' ? '🎥 Appel vidéo Wakh Reek' : '📞 Appel audio Wakh Reek', { body: `${callerName} vous appelle`, tag: `wakhreek-call-${call.id}`, requireInteraction: true });
+            notification.onclick = () => { window.focus?.(); window.location.href = `/appel?conversationId=${encodeURIComponent(call.conversation_id)}`; };
+          }
+        }
+        if (!call && notifiedCallRef.current) { notifiedCallRef.current = null; stopRinging(); }
+      } catch {}
+    }
+    checkIncoming();
+    const timer = setInterval(checkIncoming, 1500);
+    return () => { alive = false; clearInterval(timer); stopRinging(); };
+  }, [session]);
+
+  useEffect(() => {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') setNotificationsReady(true);
+  }, []);
+
+  function playRingTone() {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = audioContextRef.current || new Ctx();
+      audioContextRef.current = ctx;
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      osc.type = 'sine'; osc.frequency.setValueAtTime(760, ctx.currentTime); gain.gain.setValueAtTime(0.0001, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.03); gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.55);
+      osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.58);
+    } catch {}
+  }
+  function startRinging() { stopRinging(); playRingTone(); ringTimerRef.current = setInterval(playRingTone, 1100); }
+  function stopRinging() { if (ringTimerRef.current) clearInterval(ringTimerRef.current); ringTimerRef.current = null; try { navigator.vibrate?.(0); } catch {} }
+  async function enableCallAlerts() {
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') await Notification.requestPermission();
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (Ctx) { const ctx = audioContextRef.current || new Ctx(); audioContextRef.current = ctx; await ctx.resume?.(); playRingTone(); }
+      setNotificationsReady(typeof Notification === 'undefined' || Notification.permission === 'granted');
+    } catch {}
+  }
+  function answerIncoming() { if (!incomingCall) return; stopRinging(); window.location.href = `/appel?conversationId=${encodeURIComponent(incomingCall.conversation_id)}`; }
+  async function rejectIncoming() { if (!incomingCall) return; try { await api('/api/calls', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'end', conversationId: incomingCall.conversation_id, callId: incomingCall.id }) }); } catch {} stopRinging(); setIncomingCall(null); }
+
   async function openMember(member) { try { const conv = await api('/api/member-conversations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ memberId: member.id }) }); setActive({ ...conv, partner: member }); await refresh(); } catch (e) { setError(e.message); } }
   async function contact(memberId) { try { await api('/api/members/contacts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ memberId }) }); await refresh(); } catch (e) { setError(e.message); } }
   async function block(memberId) { if (!confirm('Bloquer ce membre ? Il ne pourra plus te contacter ni voir tes stories.')) return; try { await api('/api/members/blocks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ memberId }) }); setActive(null); await refresh(); } catch (e) { setError(e.message); } }
@@ -26,54 +84,29 @@ export default function Membres() {
   async function pickMedia(e) { const file = e.target.files?.[0]; if (!file) return; try { const type = file.type.startsWith('video/') ? 'video' : 'image'; const url = await upload(file, `members/${type}`); await send('', type, url); } catch (err) { setError(err.message); } e.target.value = ''; }
 
   async function toggleAudio() {
-    if (recording) {
-      try { recorderRef.current?.stop(); } catch {}
-      return;
-    }
+    if (recording) { try { recorderRef.current?.stop(); } catch {} return; }
     setError('');
     try {
       if (!navigator.mediaDevices?.getUserMedia) throw new Error('Microphone non disponible sur cet appareil.');
       if (typeof MediaRecorder === 'undefined') throw new Error('Enregistrement audio non pris en charge par ce navigateur.');
-
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
       const mimeType = candidates.find((type) => MediaRecorder.isTypeSupported?.(type)) || '';
       const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-      const chunks = [];
-      const startedAt = Date.now();
-
+      const chunks = []; const startedAt = Date.now();
       recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.push(e.data); };
       recorder.onerror = () => { stream.getTracks().forEach((t) => t.stop()); setRecording(false); setError('Erreur pendant l’enregistrement audio.'); };
-      recorder.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        setRecording(false);
-        recorderRef.current = null;
-        try {
-          if (!chunks.length) throw new Error('Aucun son enregistré. Réessaie en parlant après le démarrage.');
-          const finalType = recorder.mimeType || mimeType || 'audio/webm';
-          const ext = finalType.includes('mp4') ? 'm4a' : finalType.includes('ogg') ? 'ogg' : 'webm';
-          const blob = new Blob(chunks, { type: finalType });
-          const file = new File([blob], `vocal.${ext}`, { type: finalType });
-          const url = await upload(file, 'members/audio');
-          await send('', 'audio', url, Math.max(1, Math.ceil((Date.now() - startedAt) / 1000)));
-        } catch (err) { setError(err.message || 'Impossible d’envoyer le message vocal.'); }
-      };
-
-      recorder.start(250);
-      recorderRef.current = recorder;
-      setRecording(true);
-    } catch (err) {
-      const name = err?.name || '';
-      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') setError('Autorise le microphone dans les réglages de Wakhreek puis réessaie.');
-      else if (name === 'NotFoundError') setError('Aucun microphone détecté sur cet appareil.');
-      else setError(err?.message || 'Impossible d’utiliser le microphone.');
-    }
+      recorder.onstop = async () => { stream.getTracks().forEach((t) => t.stop()); setRecording(false); recorderRef.current = null; try { if (!chunks.length) throw new Error('Aucun son enregistré. Réessaie en parlant après le démarrage.'); const finalType = recorder.mimeType || mimeType || 'audio/webm'; const ext = finalType.includes('mp4') ? 'm4a' : finalType.includes('ogg') ? 'ogg' : 'webm'; const blob = new Blob(chunks, { type: finalType }); const file = new File([blob], `vocal.${ext}`, { type: finalType }); const url = await upload(file, 'members/audio'); await send('', 'audio', url, Math.max(1, Math.ceil((Date.now() - startedAt) / 1000))); } catch (err) { setError(err.message || 'Impossible d’envoyer le message vocal.'); } };
+      recorder.start(250); recorderRef.current = recorder; setRecording(true);
+    } catch (err) { const name = err?.name || ''; if (name === 'NotAllowedError' || name === 'PermissionDeniedError') setError('Autorise le microphone dans les réglages de Wakhreek puis réessaie.'); else if (name === 'NotFoundError') setError('Aucun microphone détecté sur cet appareil.'); else setError(err?.message || 'Impossible d’utiliser le microphone.'); }
   }
 
   if (!session) return <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', fontFamily: 'system-ui', background: '#f3f7fa', padding: 20 }}><section style={{ maxWidth: 460, background: 'white', borderRadius: 20, padding: 28, textAlign: 'center' }}><h1>Wakh Reek Membres</h1><p>Crée un compte ou connecte-toi pour discuter avec les membres enregistrés.</p><a href="/compte" style={{ ...btn, display: 'inline-block', textDecoration: 'none' }}>Accéder à mon compte</a></section></main>;
   return <main style={{ minHeight: '100vh', background: '#f3f7fa', fontFamily: 'Inter,system-ui,sans-serif', color: '#102038', overflowX: 'hidden' }}>
+    {incomingCall && <div style={{ position: 'fixed', inset: '12px 12px auto 12px', zIndex: 9999, maxWidth: 520, margin: '0 auto', background: '#fff', borderRadius: 20, boxShadow: '0 18px 55px rgba(15,23,42,.28)', padding: 16, border: '3px solid #16a34a' }}><div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><Avatar person={incomingCall.caller} size={58}/><div style={{ flex: 1 }}><div style={{ color: '#16a34a', fontWeight: 900 }}>{incomingCall.call_type === 'video' ? '🎥 Appel vidéo entrant' : '📞 Appel audio entrant'}</div><div style={{ fontSize: 22, fontWeight: 900 }}>{incomingCall.caller?.full_name || incomingCall.caller?.phone || 'Membre Wakh Reek'}</div></div></div><div style={{ display: 'flex', gap: 10, marginTop: 14 }}><button onClick={rejectIncoming} style={{ ...btn, flex: 1, background: '#dc2626' }}>🔴 Refuser</button><button onClick={answerIncoming} style={{ ...btn, flex: 1, background: '#16a34a' }}>✅ Répondre</button></div></div>}
     <header style={{ background: BLUE, color: 'white', padding: 16, textAlign: 'center' }}><a href="/" style={{ color: 'white', fontWeight: 900, fontSize: 23, textDecoration: 'none' }}>ONLY TOK – WAKH REEK</a><div style={{ marginTop: 8, display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}><a href="/" style={{ color: 'white' }}>Marché</a><span>·</span><b>Membres</b><span>·</span><a href="/profil" style={{ color: 'white', fontWeight: 800 }}>Profil</a><span>·</span><a href="/vendeur" style={{ color: 'white' }}>Espace vendeur</a></div></header>
     <div style={{ maxWidth: 1080, margin: '0 auto', padding: 16 }}>
+      {!notificationsReady && <button onClick={enableCallAlerts} style={{ ...btn, width: '100%', marginBottom: 12, background: '#16a34a' }}>🔔 Activer son et notifications des appels</button>}
       <div style={{ background: 'white', padding: 16, borderRadius: 16, marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><Avatar person={me} size={48}/><div><b>{me?.full_name || session.user.email}</b><div style={{ color: '#61718b', fontSize: 13 }}>{me?.phone || 'session active sur cet appareil'}</div></div></div><div style={{ display: 'flex', gap: 8 }}><a href="/profil" style={{ ...btn, textDecoration: 'none', background: '#e7f6ff', color: BLUE }}>Mon profil</a><button onClick={() => getSupabaseBrowser().auth.signOut().then(() => location.href = '/compte')} style={{ border: 0, background: 'none', color: '#b42318' }}>Déconnexion</button></div></div>
       {error && <p style={{ background: '#fff0f0', padding: 10, borderRadius: 10, color: '#b42318' }}>{error}</p>}
       <section style={{ background: 'white', padding: 16, borderRadius: 16 }}><h2 style={{ marginTop: 0 }}>Trouver un membre</h2><input style={input} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Nom ou numéro de téléphone" />{results.map((member) => <div key={member.id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #eef1f4', flexWrap: 'wrap' }}><Avatar person={member}/><div style={{ flex: '1 1 150px' }}><b>{member.full_name || 'Membre Wakh Reek'}</b><div style={{ color: '#657080', fontSize: 13 }}>{member.phone || 'Téléphone non affiché'} · {member.role === 'seller' ? 'Vendeur' : 'Membre'}</div></div><button onClick={() => openMember(member)} style={btn}>Discuter</button><button onClick={() => contact(member.id)} style={{ ...btn, background: '#e7f6ff', color: BLUE }}>Ajouter</button><button onClick={() => block(member.id)} style={{ border: 0, color: '#b42318', background: 'none' }}>Bloquer</button></div>)}</section>
