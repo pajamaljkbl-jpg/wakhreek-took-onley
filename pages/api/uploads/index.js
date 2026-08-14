@@ -1,7 +1,7 @@
 import { supabaseAdmin } from '../../../lib/supabase';
 import crypto from 'crypto';
 
-// Les images sont envoyées au Storage Supabase dans le bucket public.
+// Les fichiers sont envoyés au Storage Supabase dans le bucket public.
 // Le navigateur n'a jamais accès à la clé service_role.
 export const config = {
   api: {
@@ -42,11 +42,8 @@ const EXTENSIONS = {
 
 function safeFolder(value) {
   if (typeof value !== 'string' || !value.trim()) return 'uploads';
-  // Empêche ../ et les chemins absolus.
   const cleaned = value.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-  if (!cleaned || cleaned.includes('..') || !/^[a-zA-Z0-9/_-]+$/.test(cleaned)) {
-    return 'uploads';
-  }
+  if (!cleaned || cleaned.includes('..') || !/^[a-zA-Z0-9/_-]+$/.test(cleaned)) return 'uploads';
   return cleaned;
 }
 
@@ -64,9 +61,10 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Fichier obligatoire' });
     }
 
-    // Accepte uniquement un Data URL image, audio ou courte vidéo.
+    // Accepte aussi les paramètres MIME produits par MediaRecorder,
+    // par ex. audio/webm;codecs=opus et audio/ogg;codecs=opus.
     const match = source.match(
-      /^data:((?:image\/(?:jpeg|png|webp|gif)|audio\/(?:webm|ogg|mpeg|mp4)|video\/(?:webm|mp4|quicktime)));base64,([A-Za-z0-9+/=\s]+)$/
+      /^data:((?:image\/(?:jpeg|png|webp|gif)|audio\/(?:webm|ogg|mpeg|mp4)|video\/(?:webm|mp4|quicktime)))(?:;codecs?=[^;,]+)?;base64,([A-Za-z0-9+/=\s]+)$/i
     );
 
     if (!match) {
@@ -75,15 +73,13 @@ export default async function handler(req, res) {
       });
     }
 
-    const contentType = match[1];
+    // On normalise le type pour Supabase Storage et la liste blanche.
+    const contentType = match[1].toLowerCase();
     const base64 = match[2].replace(/\s/g, '');
     const buffer = Buffer.from(base64, 'base64');
 
-    if (!buffer.length) {
-      return res.status(400).json({ error: 'Fichier vide' });
-    }
+    if (!buffer.length) return res.status(400).json({ error: 'Fichier vide' });
 
-    // Limite applicative : compatible avec le traitement Vercel par Data URL.
     if (buffer.length > 4.5 * 1024 * 1024) {
       return res.status(413).json({ error: 'Fichier trop volumineux (maximum 4,5 Mo)' });
     }
@@ -111,18 +107,13 @@ export default async function handler(req, res) {
       });
     }
 
-    const { data } = supabaseAdmin.storage
-      .from(BUCKET)
-      .getPublicUrl(path);
+    const { data } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(path);
 
     if (!data?.publicUrl) {
       return res.status(500).json({ error: 'URL publique impossible à générer' });
     }
 
-    return res.status(201).json({
-      url: data.publicUrl,
-      path,
-    });
+    return res.status(201).json({ url: data.publicUrl, path });
   } catch (error) {
     console.error('Upload API error:', error);
     return res.status(500).json({ error: 'Erreur serveur pendant l’upload' });
