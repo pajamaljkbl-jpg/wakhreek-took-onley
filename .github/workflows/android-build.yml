@@ -47,6 +47,25 @@ jobs:
           npx cap add android
           npx cap sync android
 
+      - name: Add Android media permissions
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('android/app/src/main/AndroidManifest.xml')
+          s = p.read_text(encoding='utf-8')
+          permissions = [
+              '<uses-permission android:name="android.permission.RECORD_AUDIO" />',
+              '<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />',
+              '<uses-permission android:name="android.permission.CAMERA" />',
+          ]
+          marker = '<application'
+          for permission in permissions:
+              if permission not in s:
+                  s = s.replace(marker, permission + '\n    ' + marker, 1)
+          p.write_text(s, encoding='utf-8')
+          print(p.read_text(encoding='utf-8'))
+          PY
+
       - name: Apply official Wakhreek Android icon and splash
         run: |
           test -f assets/icon-only.png
