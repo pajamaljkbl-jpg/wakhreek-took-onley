@@ -8,8 +8,9 @@ export default async function handler(req, res) {
     const q = String(req.query.q || '').trim();
     if (q.length < 3) return res.status(200).json([]);
     const supabase = assertSupabaseConfigured();
-    const { data, error } = await supabase.from('profiles').select('id, full_name, phone, role, created_at')
-      .or(`phone.ilike.%${q.replace(/[%_,()]/g, '')}%,full_name.ilike.%${q.replace(/[%_,()]/g, '')}%`).neq('id', user.id).limit(20);
+    const safe = q.replace(/[%_,()]/g, '');
+    const { data, error } = await supabase.from('profiles').select('id, full_name, phone, role, avatar_url, created_at')
+      .or(`phone.ilike.%${safe}%,full_name.ilike.%${safe}%`).neq('id', user.id).limit(20);
     if (error) throw error;
     return res.status(200).json(data || []);
   } catch (error) { return jsonError(res, error); }
