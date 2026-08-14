@@ -10,7 +10,7 @@ export default async function handler(req, res) {
       if (error) throw error;
       const ids = (data || []).map((row) => row.member_id);
       if (!ids.length) return res.status(200).json([]);
-      const { data: people, error: peopleError } = await supabase.from('profiles').select('id, full_name, phone, role').in('id', ids);
+      const { data: people, error: peopleError } = await supabase.from('profiles').select('id, full_name, phone, role, avatar_url').in('id', ids);
       if (peopleError) throw peopleError;
       return res.status(200).json(people || []);
     }
