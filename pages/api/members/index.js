@@ -13,11 +13,12 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'PATCH') {
-      const { fullName, phone, acceptedTerms, termsVersion = '2026-08-09' } = req.body || {};
+      const { fullName, phone, avatarUrl, acceptedTerms, termsVersion = '2026-08-09' } = req.body || {};
       if (phone && phone.replace(/\D/g, '').length < 8) throw new Error('Numéro de téléphone invalide');
       const payload = {};
       if (typeof fullName === 'string') payload.full_name = fullName.trim();
       if (typeof phone === 'string') payload.phone = phone.trim();
+      if (typeof avatarUrl === 'string') payload.avatar_url = avatarUrl.trim();
       if (acceptedTerms === true) { payload.terms_accepted_at = new Date().toISOString(); payload.terms_version = termsVersion; }
       const { data, error } = await supabase.from('profiles').upsert({ id: user.id, ...payload }, { onConflict: 'id' }).select().single();
       if (error) throw error;
