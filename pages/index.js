@@ -9,19 +9,16 @@ const VILLES = [
 const BLUE = '#019EE5';
 
 export default function Home() {
-  // --- Compte acheteur (remplace localStorage) ---
   const [buyer, setBuyer] = useState(null);
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [signupError, setSignupError] = useState('');
   const [authSession, setAuthSession] = useState(null);
 
-  // --- Boutiques (remplace le tableau codé en dur) ---
   const [ville, setVille] = useState('Dakar');
   const [shops, setShops] = useState([]);
   const [loadingShops, setLoadingShops] = useState(false);
 
-  // --- Conversation / chat réel ---
   const [activeShop, setActiveShop] = useState(null);
   const [conversation, setConversation] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -29,8 +26,6 @@ export default function Home() {
   const [recording, setRecording] = useState(false);
   const recorderRef = useRef(null);
 
-  // Une session Supabase persiste dans le navigateur : l'utilisateur connecté
-  // revient directement dans Wakh Reek sans ressaisir son mot de passe.
   useEffect(() => {
     const client = getSupabaseBrowser();
     client.auth.getSession().then(async ({ data }) => {
@@ -46,7 +41,6 @@ export default function Home() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  // Charge les boutiques depuis l'API à chaque changement de ville
   useEffect(() => {
     if (!buyer) return;
     setLoadingShops(true);
@@ -56,7 +50,6 @@ export default function Home() {
       .finally(() => setLoadingShops(false));
   }, [ville, buyer]);
 
-  // Rafraîchit les messages toutes les 3s tant qu'une conversation est ouverte
   useEffect(() => {
     if (!conversation) return;
     const load = () =>
@@ -129,7 +122,6 @@ export default function Home() {
     reader.readAsDataURL(file);
   }
 
-  // Vérifie périodiquement si l'admin a validé le paiement des 10F
   useEffect(() => {
     if (!conversation || conversation.entry_fee_paid || !proofSubmitted) return;
     const interval = setInterval(async () => {
@@ -153,7 +145,7 @@ export default function Home() {
     });
     if (res.status === 403) {
       const data = await res.json();
-      return alert(data.error); // "Paiement des 10F requis..."
+      return alert(data.error);
     }
     setText('');
     const updated = await fetch(`/api/messages?conversationId=${conversation.id}`).then((r) => r.json());
@@ -196,7 +188,6 @@ export default function Home() {
     } catch { alert('Autorise le microphone pour enregistrer un message vocal.'); }
   }
 
-  // --- Écran d'inscription (remplace le localStorage) ---
   if (!buyer) {
     return (
       <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg,#e10600,#ff6a00,#ffcc00)', display: 'flex', justifyContent: 'center', padding: 20, fontFamily: 'Inter,system-ui,sans-serif' }}>
@@ -240,11 +231,21 @@ export default function Home() {
           <div key={shop.id} style={{ background: 'white', borderRadius: 16, padding: 12, boxShadow: '0 2px 10px rgba(0,0,0,.06)' }}>
             <b>{shop.name}</b> — {shop.quartier}, {shop.city}
             <div style={{ fontSize: 12, color: '#666', margin: '4px 0' }}>{shop.category}</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '6px 0' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10, margin: '10px 0' }}>
               {(shop.products || []).map((p) => (
-                <span key={p.id} style={{ fontSize: 11, background: '#fff4e5', padding: '4px 8px', borderRadius: 999 }}>
-                  {p.name} {p.price ? `${p.price}F` : '(prix à définir)'}
-                </span>
+                <div key={p.id} style={{ border: '1px solid #eee', borderRadius: 14, overflow: 'hidden', background: '#fff' }}>
+                  {p.image_url ? (
+                    <img src={p.image_url} alt={p.name} style={{ width: '100%', height: 170, objectFit: 'cover', display: 'block', background: '#f3f4f6' }} />
+                  ) : (
+                    <div style={{ height: 170, display: 'grid', placeItems: 'center', background: '#fff4e5', fontSize: 44 }}>🛍️</div>
+                  )}
+                  <div style={{ padding: 10 }}>
+                    <div style={{ fontWeight: 900, marginBottom: 4 }}>{p.name}</div>
+                    {p.description && <div style={{ fontSize: 12, color: '#666', minHeight: 34 }}>{p.description}</div>}
+                    <div style={{ marginTop: 7, fontWeight: 900, color: '#0f172a' }}>{p.price ? `${p.price} FCFA` : 'Prix à définir'}</div>
+                    {typeof p.stock !== 'undefined' && p.stock !== null && <div style={{ fontSize: 12, color: p.stock > 0 ? '#15803d' : '#b91c1c', marginTop: 3 }}>{p.stock > 0 ? `Stock : ${p.stock}` : 'Rupture de stock'}</div>}
+                  </div>
+                </div>
               ))}
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
