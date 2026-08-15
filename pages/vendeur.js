@@ -1,70 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getSupabaseBrowser } from '../lib/supabase-browser';
 
-const BLUE = '#019EE5';
-const button = { border: 0, borderRadius: 10, padding: '10px 13px', background: BLUE, color: 'white', fontWeight: 800, cursor: 'pointer' };
-
-export default function Vendeur() {
-  const [session, setSession] = useState(null);
-  const [data, setData] = useState({ shops: [], conversations: [], calls: [], orders: [] });
-  const [active, setActive] = useState(null);
-  const [text, setText] = useState('');
-  const [message, setMessage] = useState('Chargement…');
-
-  async function load(currentSession) {
-    if (!currentSession?.access_token) return;
-    const res = await fetch('/api/vendor/conversations', { headers: { Authorization: `Bearer ${currentSession.access_token}` } });
-    const body = await res.json();
-    if (!res.ok) { setMessage(body.error || 'Impossible de charger ton espace vendeur.'); return; }
-    setData({ shops: body.shops || [], conversations: body.conversations || [], calls: body.calls || [], orders: body.orders || [] });
-    setMessage('');
-    setActive((previous) => (body.conversations || []).find((item) => item.id === previous?.id) || (body.conversations || [])[0] || null);
-  }
-
-  useEffect(() => {
-    const client = getSupabaseBrowser();
-    client.auth.getSession().then(({ data: { session: current } }) => { setSession(current); if (current) load(current); else setMessage('Connecte-toi avec ton compte vendeur.'); });
-    const { data: listener } = client.auth.onAuthStateChange((_event, current) => { setSession(current); if (current) load(current); });
-    return () => listener.subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!session) return;
-    const timer = setInterval(() => load(session), 4000);
-    return () => clearInterval(timer);
-  }, [session]);
-
-  async function send() {
-    if (!text.trim() || !active) return;
-    const res = await fetch('/api/messages', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ conversationId: active.id, sender: 'shop', content: text }) });
-    const body = await res.json();
-    if (!res.ok) return setMessage(body.error || 'Message non envoyé.');
-    setText(''); await load(session);
-  }
-
-  if (!session) return <main style={shell}><section style={card}><a href="/compte" style={{ color: BLUE }}>Se connecter comme vendeur</a><h1>Espace vendeur Wakh Reek</h1><p>{message}</p></section></main>;
-
-  return <main style={shell}><section style={{ ...card, maxWidth: 1050 }}>
-    <header style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}><div><a href="/" style={{ color: BLUE }}>← Marché</a><h1 style={{ marginBottom: 0 }}>Espace vendeur</h1><small>{session.user.email}</small></div><button onClick={() => getSupabaseBrowser().auth.signOut().then(() => window.location.href = '/')} style={{ ...button, background: '#64748b' }}>Déconnexion</button></header>
-    {message && <p style={{ padding: 12, background: '#eef8ff', borderRadius: 10 }}>{message}</p>}
-    {!data.shops.length ? <div style={{ padding: 18, marginTop: 18, background: '#fff7ed', borderRadius: 12 }}><b>Aucune boutique liée à ce compte.</b><p>Crée ta boutique avec ce même compte, ou demande à l’administrateur de la lier à ton profil.</p><a href="/boutique" style={{ color: BLUE }}>Créer une boutique</a></div> : <>
-      <section style={{ marginTop: 22, padding: 18, background: '#f8fafc', borderRadius: 16 }}>
-        <h2 style={{ marginTop: 0 }}>🛒 Commandes reçues ({data.orders.length})</h2>
-        {!data.orders.length ? <p>Aucune commande reçue pour le moment.</p> : data.orders.map((order) => <article key={order.id} style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 14, padding: 16, marginTop: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}><b>Commande #{String(order.id).slice(0, 8)}</b><b style={{ color: '#16a34a' }}>{order.total_amount != null ? `${order.total_amount} FCFA` : ''}</b></div>
-          <p><b>Client :</b> {order.customer_name || 'Client'}<br /><b>Téléphone :</b> {order.customer_phone || '—'}<br /><b>Adresse :</b> {order.delivery_address || '—'}</p>
-          {order.order_items?.length > 0 && <div style={{ padding: 10, background: '#f1f5f9', borderRadius: 10 }}>{order.order_items.map((item) => <div key={item.id || `${item.product_id}-${item.quantity}`}><b>{item.product_name || item.name || 'Produit'}</b> × {item.quantity || 1}{item.price != null ? ` — ${item.price} FCFA` : ''}</div>)}</div>}
-          <div style={{ marginTop: 10 }}><b>Statut :</b> {order.status || 'pending'}</div>
-        </article>)}
-      </section>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, .8fr) minmax(0, 1.5fr)', gap: 18, marginTop: 20 }}>
-        <aside style={{ borderRight: '1px solid #e5e7eb', paddingRight: 14 }}><b>Conversations</b>{data.conversations.map((conversation) => { const ringing = data.calls.some((call) => call.conversation_id === conversation.id && call.status === 'ringing'); return <button key={conversation.id} onClick={() => setActive(conversation)} style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 9, padding: 12, borderRadius: 10, border: active?.id === conversation.id ? `2px solid ${BLUE}` : '1px solid #e5e7eb', background: ringing ? '#fff7ed' : 'white', cursor: 'pointer' }}><b>{conversation.buyer?.email || 'Client'}</b><br /><small>{conversation.messages.at(-1)?.content || 'Nouvelle discussion'}</small>{ringing && <div style={{ color: '#dc2626', fontWeight: 800, marginTop: 5 }}>📞 Appel entrant</div>}</button>; })}</aside>
-        <div>{active ? <><h2 style={{ marginTop: 0 }}>Client : {active.buyer?.email || 'Client'}</h2>{data.calls.some((call) => call.conversation_id === active.id && call.status === 'ringing') && <a href={`/appel?conversationId=${active.id}`} style={{ ...button, display: 'inline-block', textDecoration: 'none', marginBottom: 12 }}>📞 Accepter l’appel entrant</a>}<div style={{ minHeight: 280, background: '#f8fafc', padding: 12, borderRadius: 12 }}>{active.messages.map((item) => <div key={item.id} style={{ textAlign: item.sender === 'shop' ? 'right' : 'left', margin: '8px 0' }}><span style={{ display: 'inline-block', maxWidth: '75%', padding: '8px 11px', borderRadius: 12, background: item.sender === 'shop' ? BLUE : '#e5e7eb', color: item.sender === 'shop' ? 'white' : 'black' }}>{item.message_type === 'image' && <img alt="Envoyée" src={item.media_url} style={{ display: 'block', maxWidth: 180, borderRadius: 8 }} />}{item.message_type === 'audio' && <audio controls src={item.media_url} />}{item.content}</span></div>)}</div><div style={{ display: 'flex', gap: 8, marginTop: 12 }}><input value={text} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && send()} placeholder="Répondre au client…" style={{ flex: 1, padding: 12, borderRadius: 10, border: '1px solid #cbd5e1' }} /><button onClick={send} style={button}>Envoyer</button></div></> : <p>Aucune conversation pour le moment.</p>}</div>
-      </div>
-    </>}
-  </section></main>;
-}
-
-const shell = { minHeight: '100vh', background: '#f1f5f9', padding: 20, fontFamily: 'Inter,system-ui,sans-serif' };
-const card = { maxWidth: 620, margin: '20px auto', background: 'white', padding: 24, borderRadius: 20, boxShadow: '0 10px 28px rgba(15,23,42,.1)' };
+const BLUE='#019EE5';
+const button={border:0,borderRadius:10,padding:'10px 13px',background:BLUE,color:'white',fontWeight:800,cursor:'pointer'};
+export default function Vendeur(){
+ const [session,setSession]=useState(null),[data,setData]=useState({shops:[],conversations:[],calls:[],orders:[]}),[active,setActive]=useState(null),[text,setText]=useState(''),[message,setMessage]=useState('Chargement…'),[recording,setRecording]=useState(false); const recorderRef=useRef(null);
+ const auth=()=>({Authorization:`Bearer ${session?.access_token}`});
+ async function load(s){if(!s?.access_token)return;const r=await fetch('/api/vendor/conversations',{headers:{Authorization:`Bearer ${s.access_token}`}}),b=await r.json();if(!r.ok)return setMessage(b.error||'Impossible de charger ton espace vendeur.');setData({shops:b.shops||[],conversations:b.conversations||[],calls:b.calls||[],orders:b.orders||[]});setMessage('');setActive(p=>(b.conversations||[]).find(x=>x.id===p?.id)||(b.conversations||[])[0]||null)}
+ useEffect(()=>{const c=getSupabaseBrowser();c.auth.getSession().then(({data:{session:s}})=>{setSession(s);if(s)load(s);else setMessage('Connecte-toi avec ton compte vendeur.')});const{data:l}=c.auth.onAuthStateChange((_e,s)=>{setSession(s);if(s)load(s)});return()=>l.subscription.unsubscribe()},[]);
+ useEffect(()=>{if(!session)return;const t=setInterval(()=>load(session),3000);return()=>clearInterval(t)},[session]);
+ async function send(content=text,type='text',mediaUrl=null,durationSeconds=null){if(!active||(!content.trim()&&!mediaUrl))return;const r=await fetch('/api/messages',{method:'POST',headers:{'Content-Type':'application/json',...auth()},body:JSON.stringify({conversationId:active.id,sender:'shop',content,type,mediaUrl,durationSeconds})}),b=await r.json();if(!r.ok)return setMessage(b.error||'Message non envoyé.');setText('');await load(session)}
+ async function upload(file,folder){const source=await new Promise((ok,no)=>{const rd=new FileReader();rd.onload=()=>ok(rd.result);rd.onerror=no;rd.readAsDataURL(file)});const r=await fetch('/api/uploads',{method:'POST',headers:{'Content-Type':'application/json',...auth()},body:JSON.stringify({fileBase64:source,folder})}),b=await r.json();if(!r.ok)throw new Error(b.error||'Upload impossible');return b.url}
+ async function pickMedia(e){const f=e.target.files?.[0];if(!f)return;try{const type=f.type.startsWith('video/')?'video':'image';const url=await upload(f,`vendor/${type}`);await send('',type,url)}catch(err){setMessage(err.message)}e.target.value=''}
+ async function toggleAudio(){if(recording){recorderRef.current?.stop();return}try{const stream=await navigator.mediaDevices.getUserMedia({audio:true});const rec=new MediaRecorder(stream),chunks=[],start=Date.now();rec.ondataavailable=e=>e.data.size&&chunks.push(e.data);rec.onstop=async()=>{stream.getTracks().forEach(t=>t.stop());setRecording(false);try{const blob=new Blob(chunks,{type:rec.mimeType||'audio/webm'}),file=new File([blob],'vocal.webm',{type:blob.type}),url=await upload(file,'vendor/audio');await send('','audio',url,Math.max(1,Math.ceil((Date.now()-start)/1000)))}catch(e){setMessage(e.message)}};rec.start(250);recorderRef.current=rec;setRecording(true)}catch(e){setMessage('Autorise le microphone puis réessaie.')}}
+ if(!session)return <main style={shell}><section style={card}><a href="/compte" style={{color:BLUE}}>Se connecter comme vendeur</a><h1>Espace vendeur Wakh Reek</h1><p>{message}</p></section></main>;
+ const ringing=active&&data.calls.some(c=>c.conversation_id===active.id&&c.status==='ringing');
+ return <main style={shell}><section style={{...card,maxWidth:1050}}><header style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'center'}}><div><a href="/" style={{color:BLUE}}>← Marché</a><h1 style={{marginBottom:0}}>Espace vendeur</h1><small>{session.user.email}</small></div><button onClick={()=>getSupabaseBrowser().auth.signOut().then(()=>location.href='/')} style={{...button,background:'#64748b'}}>Déconnexion</button></header>{message&&<p style={{padding:12,background:'#eef8ff',borderRadius:10}}>{message}</p>}
+ {!data.shops.length?<div style={{padding:18,marginTop:18,background:'#fff7ed',borderRadius:12}}><b>Aucune boutique liée à ce compte.</b><p>Crée ta boutique avec ce même compte.</p><a href="/boutique">Créer une boutique</a></div>:<><section style={{marginTop:22,padding:18,background:'#f8fafc',borderRadius:16}}><h2>🛒 Commandes reçues ({data.orders.length})</h2>{!data.orders.length?<p>Aucune commande reçue.</p>:data.orders.map(o=><article key={o.id} style={{background:'white',border:'1px solid #e5e7eb',borderRadius:14,padding:16,marginTop:12}}><b>Commande #{String(o.id).slice(0,8)}</b><p><b>Client :</b> {o.customer_name||'Client'}<br/><b>Téléphone :</b> {o.customer_phone||'—'}<br/><b>Adresse :</b> {o.delivery_address||'—'}</p>{o.order_items?.map(i=><div key={i.id||i.product_id}><b>{i.product_name||i.name||'Produit'}</b> × {i.quantity||1}</div>)}<p><b>Statut :</b> {o.status||'pending'}</p></article>)}</section>
+ <div style={{display:'grid',gridTemplateColumns:'minmax(240px,.8fr) minmax(0,1.5fr)',gap:18,marginTop:20}}><aside><b>Conversations</b>{data.conversations.map(c=><button key={c.id} onClick={()=>setActive(c)} style={{display:'block',width:'100%',textAlign:'left',marginTop:9,padding:12,borderRadius:10,border:active?.id===c.id?`2px solid ${BLUE}`:'1px solid #ddd',background:'white'}}><b>{c.buyer?.email||'Client'}</b><br/><small>{c.messages.at(-1)?.content||'Nouvelle discussion'}</small></button>)}</aside><div>{active?<><h2>Client : {active.buyer?.email||'Client'}</h2><div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:10}}>{ringing&&<a href={`/appel?conversationId=${active.id}`} style={{...button,textDecoration:'none',background:'#16a34a'}}>✅ Répondre</a>}<a href={`/appel?conversationId=${active.id}&type=audio`} style={{...button,textDecoration:'none'}}>📞 Appel</a><a href={`/appel?conversationId=${active.id}&type=video`} style={{...button,textDecoration:'none',background:'#7c3aed'}}>🎥 Vidéo</a><label style={{...button,background:'#475569'}}>🖼️ Photo / vidéo<input type="file" accept="image/*,video/*" onChange={pickMedia} hidden/></label><button onClick={toggleAudio} style={{...button,background:recording?'#dc2626':'#f59e0b'}}>{recording?'⏹️ Arrêter':'🎤 Vocal'}</button></div><div style={{minHeight:280,background:'#f8fafc',padding:12,borderRadius:12}}>{active.messages.map(m=><div key={m.id} style={{textAlign:m.sender==='shop'?'right':'left',margin:'8px 0'}}><span style={{display:'inline-block',maxWidth:'78%',padding:'8px 11px',borderRadius:12,background:m.sender==='shop'?BLUE:'#e5e7eb',color:m.sender==='shop'?'white':'black'}}>{m.message_type==='image'&&<img src={m.media_url} alt="" style={{display:'block',maxWidth:240,borderRadius:8}}/>}{m.message_type==='video'&&<video controls src={m.media_url} style={{display:'block',maxWidth:300,borderRadius:8}}/>}{m.message_type==='audio'&&<audio controls src={m.media_url}/>} {m.content}</span></div>)}</div><div style={{display:'flex',gap:8,marginTop:12}}><input value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>e.key==='Enter'&&send()} placeholder="Répondre au client…" style={{flex:1,padding:12,borderRadius:10,border:'1px solid #cbd5e1'}}/><button onClick={()=>send()} style={button}>Envoyer</button></div></>:<p>Aucune conversation.</p>}</div></div></>}</section></main>}
+const shell={minHeight:'100vh',background:'#f1f5f9',padding:20,fontFamily:'Inter,system-ui,sans-serif'};const card={maxWidth:620,margin:'20px auto',background:'white',padding:24,borderRadius:20,boxShadow:'0 10px 28px rgba(15,23,42,.1)'};
