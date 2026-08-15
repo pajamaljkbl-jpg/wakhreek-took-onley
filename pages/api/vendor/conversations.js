@@ -16,11 +16,16 @@ export default async function handler(req, res) {
   const { data: shops, error: shopsError } = await supabaseAdmin.from('shops').select('id, name, city').eq('owner_id', seller.id);
   if (shopsError) return res.status(500).json({ error: shopsError.message });
   const shopIds = (shops || []).map((shop) => shop.id);
-  if (!shopIds.length) return res.status(200).json({ shops: [], conversations: [], calls: [] });
+  if (!shopIds.length) return res.status(200).json({ shops: [], conversations: [], calls: [], orders: [] });
 
-  const { data: conversations, error } = await supabaseAdmin
-    .from('conversations').select('*').in('shop_id', shopIds).order('created_at', { ascending: false });
-  if (error) return res.status(500).json({ error: error.message });
+  const [{ data: conversations, error: conversationsError }, { data: orders, error: ordersError }] = await Promise.all([
+    supabaseAdmin.from('conversations').select('*').in('shop_id', shopIds).order('created_at', { ascending: false }),
+    supabaseAdmin.from('orders').select('*, order_items(*)').in('shop_id', shopIds).order('created_at', { ascending: false }),
+  ]);
+
+  if (conversationsError) return res.status(500).json({ error: conversationsError.message });
+  if (ordersError) return res.status(500).json({ error: ordersError.message });
+
   const ids = (conversations || []).map((item) => item.id);
   const buyerIds = [...new Set((conversations || []).map((item) => item.buyer_id).filter(Boolean))];
   const [{ data: buyers }, { data: messages }, { data: calls }] = await Promise.all([
@@ -28,8 +33,19 @@ export default async function handler(req, res) {
     ids.length ? supabaseAdmin.from('messages').select('*').in('conversation_id', ids).order('created_at', { ascending: true }) : Promise.resolve({ data: [] }),
     ids.length ? supabaseAdmin.from('call_sessions').select('*').in('conversation_id', ids).in('status', ['ringing', 'connected']).order('created_at', { ascending: false }) : Promise.resolve({ data: [] }),
   ]);
+
   const buyerById = Object.fromEntries((buyers || []).map((buyer) => [buyer.id, buyer]));
   const messagesByConversation = {};
   (messages || []).forEach((message) => { (messagesByConversation[message.conversation_id] ||= []).push(message); });
-  return res.status(200).json({ shops, calls: calls || [], conversations: (conversations || []).map((conversation) => ({ ...conversation, buyer: buyerById[conversation.buyer_id] || null, messages: messagesByConversation[conversation.id] || [] })) });
+
+  return res.status(200).json({
+    shops,
+    calls: calls || [],
+    orders: orders || [],
+    conversations: (conversations || []).map((conversation) => ({
+      ...conversation,
+      buyer: buyerById[conversation.buyer_id] || null,
+      messages: messagesByConversation[conversation.id] || [],
+    })),
+  });
 }
