@@ -1,8 +1,6 @@
 import { supabaseAdmin } from '../../../lib/supabase';
 
-// Remplace le chat simulé (setTimeout + réponses automatiques) par une vraie
-// messagerie stockée en base — les deux parties (acheteur/boutique) lisent
-// et écrivent dans la même conversation.
+// Messagerie gratuite entre acheteur et boutique : texte, image et audio.
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     const { conversationId } = req.query;
@@ -25,17 +23,14 @@ export default async function handler(req, res) {
     }
     if (!['text', 'image', 'audio'].includes(type)) return res.status(400).json({ error: 'Type de message invalide' });
 
-    // On vérifie que le "10F" d'entrée a bien été payé avant d'autoriser
-    // l'envoi de messages — sinon on recrée la faille du bouton "j'ai payé".
-    const { data: conv } = await supabaseAdmin
+    const { data: conv, error: convError } = await supabaseAdmin
       .from('conversations')
-      .select('entry_fee_paid, shop_id')
+      .select('id, shop_id')
       .eq('id', conversationId)
-      .single();
+      .maybeSingle();
 
-    if (!conv?.entry_fee_paid) {
-      return res.status(403).json({ error: 'Paiement des 10F requis avant de pouvoir écrire' });
-    }
+    if (convError) return res.status(500).json({ error: convError.message });
+    if (!conv) return res.status(404).json({ error: 'Conversation introuvable' });
 
     // Une réponse "shop" est réservée au propriétaire connecté de la boutique.
     if (sender === 'shop') {
