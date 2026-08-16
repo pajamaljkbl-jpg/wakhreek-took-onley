@@ -4,6 +4,16 @@ import { sendPushToUser, userIdFromEmail } from '../../../lib/push-server';
 
 const MEMBER_CALL_TABLE = 'member_call_sessions';
 const SHOP_CALL_TABLE = 'call_sessions';
+const CALL_TIMEOUT_MS = 30_000;
+
+async function expireUnansweredCalls() {
+  const cutoff = new Date(Date.now() - CALL_TIMEOUT_MS).toISOString();
+  const endedAt = new Date().toISOString();
+  await Promise.all([
+    supabaseAdmin.from(MEMBER_CALL_TABLE).update({ status: 'ended', ended_at: endedAt }).eq('status', 'ringing').lt('created_at', cutoff),
+    supabaseAdmin.from(SHOP_CALL_TABLE).update({ status: 'ended', ended_at: endedAt }).eq('status', 'ringing').lt('created_at', cutoff)
+  ]);
+}
 
 async function resolveConversation(conversationId, user) {
   const { data: member, error: memberError } = await supabaseAdmin.from('member_conversations').select('id, member_one_id, member_two_id').eq('id', conversationId).maybeSingle();
@@ -81,6 +91,8 @@ export default async function handler(req, res) {
   try {
     if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase non configuré.' });
     const user = await requireUser(req);
+    await expireUnansweredCalls();
+
     if (req.method === 'GET') {
       const { conversationId, incoming } = req.query;
       if (incoming === '1') return res.status(200).json(await incomingForUser(user));
@@ -110,7 +122,8 @@ export default async function handler(req, res) {
           body: `${label} vous appelle`,
           callId: data.id,
           tag: `wakhreek-call-${data.id}`,
-          url: `/appel?conversationId=${encodeURIComponent(conversationId)}&mode=${callType}`
+          timeoutMs: CALL_TIMEOUT_MS,
+          url: `/appel?conversationId=${encodeURIComponent(conversationId)}`
         }).catch((e) => console.error('Push appel:', e));
       }
       return res.status(201).json({ ...data, conversation_kind: access.kind });
@@ -119,10 +132,11 @@ export default async function handler(req, res) {
     const { data: call, error: callError } = await supabaseAdmin.from(table).select('*').eq('id', callId).eq('conversation_id', conversationId).maybeSingle();
     if (callError) throw callError;
     if (!call) return res.status(404).json({ error: 'Appel introuvable' });
+    if (call.status === 'ended' && action !== 'end') return res.status(410).json({ error: 'Cet appel est terminé.' });
     if (action === 'answer') {
       if (!signal) return res.status(400).json({ error: 'Réponse invalide' });
       if (call.caller_id === user.id) return res.status(400).json({ error: 'Le correspondant doit répondre à cet appel' });
-      const { data, error } = await supabaseAdmin.from(table).update({ answer: signal, status: 'connected', answered_at: new Date().toISOString() }).eq('id', call.id).select().single();
+      const { data, error } = await supabaseAdmin.from(table).update({ answer: signal, status: 'connected', answered_at: new Date().toISOString() }).eq('id', call.id).eq('status', 'ringing').select().single();
       if (error) throw error;
       return res.status(200).json({ ...data, conversation_kind: access.kind });
     }
