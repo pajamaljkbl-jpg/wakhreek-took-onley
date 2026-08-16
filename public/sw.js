@@ -5,21 +5,28 @@ self.addEventListener('push', (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch (_) { data = {}; }
   const title = data.title || '📞 Appel Wakh Reek';
+  const tag = data.tag || `wakhreek-call-${data.callId || Date.now()}`;
+  const timeoutMs = Number(data.timeoutMs) || 30000;
   const options = {
     body: data.body || 'Appel entrant',
     icon: '/icon-192.png',
     badge: '/icon-192.png',
-    tag: data.tag || `wakhreek-call-${data.callId || Date.now()}`,
+    tag,
     renotify: true,
     requireInteraction: true,
-    vibrate: [500, 250, 500, 250, 800],
-    data: { url: data.url || '/', callId: data.callId || null },
+    vibrate: [700, 250, 700, 250, 700, 500, 900],
+    data: { url: data.url || '/', callId: data.callId || null, expiresAt: Date.now() + timeoutMs },
     actions: [
       { action: 'answer', title: '📞 Répondre' },
       { action: 'open', title: 'Ouvrir' }
     ]
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil((async () => {
+    await self.registration.showNotification(title, options);
+    await new Promise((resolve) => setTimeout(resolve, timeoutMs));
+    const notifications = await self.registration.getNotifications({ tag });
+    notifications.forEach((notification) => notification.close());
+  })());
 });
 
 self.addEventListener('notificationclick', (event) => {
