@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "897761154744",
+    "project_id": "wakhreek",
+    "storage_bucket": "wakhreek.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:897761154744:android:ad2e3ff38c616a3debc64d",
+        "android_client_info": {
+          "package_name": "com.wakhreek.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAXol9xXdMmEuqVxDk9dkpkHUPyqBgoQQ4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
