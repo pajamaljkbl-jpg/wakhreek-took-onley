@@ -1,6 +1,7 @@
 package com.wakhreek.app
 
 import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import android.view.WindowManager
 import android.widget.Button
@@ -33,7 +34,11 @@ class IncomingCallActivity : Activity() {
             text = "Répondre"
             setOnClickListener {
                 val url = intent.getStringExtra("url") ?: "https://www.wakhreek.com"
-                startActivity(MainActivity.webIntent(this@IncomingCallActivity, url))
+                val open = Intent(this@IncomingCallActivity, MainActivity::class.java).apply {
+                    putExtra("url", url)
+                    flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                }
+                startActivity(open)
                 finish()
             }
         }
