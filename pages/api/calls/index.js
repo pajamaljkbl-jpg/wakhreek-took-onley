@@ -115,9 +115,10 @@ export default async function handler(req, res) {
       const { data, error } = await supabaseAdmin.from(table).insert({ conversation_id: conversationId, caller_id: user.id, call_type: callType, offer: signal, status: 'ringing' }).select().single();
       if (error) throw error;
       const recipientId = await recipientFor(access, user);
+      let push = { sent: 0, skipped: true };
       if (recipientId) {
         const label = user.email || 'Un membre Wakh Reek';
-        sendPushToUser(recipientId, {
+        push = await sendPushToUser(recipientId, {
           kind: 'call',
           title: callType === 'video' ? '🎥 Appel vidéo Wakh Reek' : '📞 Appel audio Wakh Reek',
           body: `${label} vous appelle`,
@@ -127,9 +128,9 @@ export default async function handler(req, res) {
           tag: `wakhreek-call-${data.id}`,
           timeoutMs: CALL_TIMEOUT_MS,
           url: `https://www.wakhreek.com/appel?conversationId=${encodeURIComponent(conversationId)}`
-        }).catch((e) => console.error('Push appel:', e));
+        });
       }
-      return res.status(201).json({ ...data, conversation_kind: access.kind });
+      return res.status(201).json({ ...data, conversation_kind: access.kind, push });
     }
     if (!callId) return res.status(400).json({ error: 'callId requis' });
     const { data: call, error: callError } = await supabaseAdmin.from(table).select('*').eq('id', callId).eq('conversation_id', conversationId).maybeSingle();
