@@ -118,12 +118,15 @@ export default async function handler(req, res) {
       if (recipientId) {
         const label = user.email || 'Un membre Wakh Reek';
         sendPushToUser(recipientId, {
+          kind: 'call',
           title: callType === 'video' ? '🎥 Appel vidéo Wakh Reek' : '📞 Appel audio Wakh Reek',
           body: `${label} vous appelle`,
+          caller: label,
+          callType,
           callId: data.id,
           tag: `wakhreek-call-${data.id}`,
           timeoutMs: CALL_TIMEOUT_MS,
-          url: `/appel?conversationId=${encodeURIComponent(conversationId)}`
+          url: `https://www.wakhreek.com/appel?conversationId=${encodeURIComponent(conversationId)}`
         }).catch((e) => console.error('Push appel:', e));
       }
       return res.status(201).json({ ...data, conversation_kind: access.kind });
