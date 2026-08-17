@@ -2,10 +2,13 @@ package com.wakhreek.app
 
 import android.Manifest
 import android.app.Activity
+import android.app.NotificationManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.webkit.CookieManager
 import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
@@ -75,6 +78,7 @@ class MainActivity : Activity() {
         }
 
         ensureNativeMediaPermissions()
+        ensureFullScreenIntentPermission()
         val startUrl = intent.getStringExtra("url") ?: "https://www.wakhreek.com"
         webView.loadUrl(startUrl)
     }
@@ -94,8 +98,21 @@ class MainActivity : Activity() {
         val needed = mutableListOf<String>()
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) needed += Manifest.permission.RECORD_AUDIO
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) needed += Manifest.permission.CAMERA
-        if (android.os.Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) needed += Manifest.permission.POST_NOTIFICATIONS
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) needed += Manifest.permission.POST_NOTIFICATIONS
         if (needed.isNotEmpty()) ActivityCompat.requestPermissions(this, needed.toTypedArray(), mediaRequestCode)
+    }
+
+    private fun ensureFullScreenIntentPermission() {
+        if (Build.VERSION.SDK_INT < 34) return
+        val manager = getSystemService(NotificationManager::class.java)
+        if (manager.canUseFullScreenIntent()) return
+        try {
+            val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
+                data = Uri.parse("package:$packageName")
+            }
+            startActivity(intent)
+        } catch (_: Exception) {
+        }
     }
 
     private fun publishFirebaseTokenToWeb() {
