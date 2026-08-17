@@ -24,17 +24,53 @@ async function enableCallNotifications(registration) {
   await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ subscription: subscription.toJSON() }) });
 }
 
+async function registerNativeToken(token) {
+  if (!token) return false;
+  const client = getSupabaseBrowser();
+  const { data: { session } } = await client.auth.getSession();
+  if (!session?.access_token) return false;
+  const response = await fetch('/api/push/native-register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify({ token })
+  });
+  return response.ok;
+}
+
 export default function App({ Component, pageProps }) {
   useEffect(() => {
-    if (!('serviceWorker' in navigator)) return;
-    const register = async () => {
-      try {
-        const registration = await navigator.serviceWorker.register('/sw.js');
-        await enableCallNotifications(registration);
-      } catch (error) { console.error('Notifications Wakh Reek:', error); }
+    let nativeToken = window.__WAKHREEK_FCM_TOKEN || '';
+    const registerNative = async () => {
+      nativeToken = window.__WAKHREEK_FCM_TOKEN || nativeToken;
+      if (nativeToken) await registerNativeToken(nativeToken);
     };
-    if (document.readyState === 'complete') register();
-    else window.addEventListener('load', register, { once: true });
+    const onNativeToken = async (event) => {
+      nativeToken = event?.detail?.token || window.__WAKHREEK_FCM_TOKEN || '';
+      await registerNative();
+    };
+    window.addEventListener('wakhreek-native-token', onNativeToken);
+
+    const client = getSupabaseBrowser();
+    const { data: authListener } = client.auth.onAuthStateChange(() => {
+      setTimeout(registerNative, 250);
+    });
+    registerNative();
+
+    if ('serviceWorker' in navigator) {
+      const register = async () => {
+        try {
+          const registration = await navigator.serviceWorker.register('/sw.js');
+          await enableCallNotifications(registration);
+        } catch (error) { console.error('Notifications Wakh Reek:', error); }
+      };
+      if (document.readyState === 'complete') register();
+      else window.addEventListener('load', register, { once: true });
+    }
+
+    return () => {
+      window.removeEventListener('wakhreek-native-token', onNativeToken);
+      authListener?.subscription?.unsubscribe?.();
+    };
   }, []);
 
   return <><Head>
