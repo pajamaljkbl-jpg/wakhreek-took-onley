@@ -34,27 +34,63 @@ async function registerNativeToken(token) {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
     body: JSON.stringify({ token })
   });
+  if (!response.ok) console.warn('Wakhreek native token registration failed:', response.status);
   return response.ok;
 }
 
 export default function App({ Component, pageProps }) {
   useEffect(() => {
     let nativeToken = window.__WAKHREEK_FCM_TOKEN || '';
+    let stopped = false;
+    let retryTimer = null;
+    let retryCount = 0;
+
     const registerNative = async () => {
+      if (stopped) return false;
       nativeToken = window.__WAKHREEK_FCM_TOKEN || nativeToken;
-      if (nativeToken) await registerNativeToken(nativeToken);
+      if (!nativeToken) return false;
+      return registerNativeToken(nativeToken);
     };
+
+    const scheduleRetries = () => {
+      clearInterval(retryTimer);
+      retryCount = 0;
+      retryTimer = setInterval(async () => {
+        retryCount += 1;
+        const ok = await registerNative();
+        if (ok || retryCount >= 20) {
+          clearInterval(retryTimer);
+          retryTimer = null;
+        }
+      }, 1500);
+    };
+
     const onNativeToken = async (event) => {
-      nativeToken = event?.detail?.token || window.__WAKHREEK_FCM_TOKEN || '';
-      await registerNative();
+      nativeToken = event?.detail?.token || window.__WAKHREEK_FCM_TOKEN || nativeToken;
+      const ok = await registerNative();
+      if (!ok) scheduleRetries();
     };
+
+    const onResume = () => {
+      if (document.visibilityState === 'visible') {
+        registerNative().then((ok) => { if (!ok) scheduleRetries(); });
+      }
+    };
+
     window.addEventListener('wakhreek-native-token', onNativeToken);
+    window.addEventListener('focus', onResume);
+    document.addEventListener('visibilitychange', onResume);
 
     const client = getSupabaseBrowser();
-    const { data: authListener } = client.auth.onAuthStateChange(() => {
-      setTimeout(registerNative, 250);
+    const { data: authListener } = client.auth.onAuthStateChange((_event, session) => {
+      if (session?.access_token) {
+        setTimeout(() => {
+          registerNative().then((ok) => { if (!ok) scheduleRetries(); });
+        }, 300);
+      }
     });
-    registerNative();
+
+    registerNative().then((ok) => { if (!ok) scheduleRetries(); });
 
     if ('serviceWorker' in navigator) {
       const register = async () => {
@@ -68,7 +104,11 @@ export default function App({ Component, pageProps }) {
     }
 
     return () => {
+      stopped = true;
+      clearInterval(retryTimer);
       window.removeEventListener('wakhreek-native-token', onNativeToken);
+      window.removeEventListener('focus', onResume);
+      document.removeEventListener('visibilitychange', onResume);
       authListener?.subscription?.unsubscribe?.();
     };
   }, []);
