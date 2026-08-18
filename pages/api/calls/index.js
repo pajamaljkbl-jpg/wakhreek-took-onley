@@ -6,6 +6,13 @@ const MEMBER_CALL_TABLE = 'member_call_sessions';
 const SHOP_CALL_TABLE = 'call_sessions';
 const CALL_TIMEOUT_MS = 30_000;
 
+function disableCache(res) {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Surrogate-Control', 'no-store');
+}
+
 async function expireUnansweredCalls() {
   const cutoff = new Date(Date.now() - CALL_TIMEOUT_MS).toISOString();
   const endedAt = new Date().toISOString();
@@ -16,19 +23,41 @@ async function expireUnansweredCalls() {
 }
 
 async function resolveConversation(conversationId, user) {
-  const { data: member, error: memberError } = await supabaseAdmin.from('member_conversations').select('id, member_one_id, member_two_id').eq('id', conversationId).maybeSingle();
+  const { data: member, error: memberError } = await supabaseAdmin
+    .from('member_conversations')
+    .select('id, member_one_id, member_two_id')
+    .eq('id', conversationId)
+    .maybeSingle();
   if (memberError) throw memberError;
-  if (member && [member.member_one_id, member.member_two_id].includes(user.id)) return { kind: 'member', table: MEMBER_CALL_TABLE, conversation: member };
+  if (member && [member.member_one_id, member.member_two_id].includes(user.id)) {
+    return { kind: 'member', table: MEMBER_CALL_TABLE, conversation: member };
+  }
 
-  const { data: shopConversation, error: shopError } = await supabaseAdmin.from('conversations').select('id, buyer_id, shop_id').eq('id', conversationId).maybeSingle();
+  const { data: shopConversation, error: shopError } = await supabaseAdmin
+    .from('conversations')
+    .select('id, buyer_id, shop_id')
+    .eq('id', conversationId)
+    .maybeSingle();
   if (shopError) throw shopError;
   if (!shopConversation) return null;
-  const { data: shop, error: ownerError } = await supabaseAdmin.from('shops').select('id, owner_id').eq('id', shopConversation.shop_id).maybeSingle();
+
+  const { data: shop, error: ownerError } = await supabaseAdmin
+    .from('shops')
+    .select('id, owner_id')
+    .eq('id', shopConversation.shop_id)
+    .maybeSingle();
   if (ownerError) throw ownerError;
   if (shop?.owner_id === user.id) return { kind: 'shop', table: SHOP_CALL_TABLE, conversation: shopConversation };
-  const { data: buyer, error: buyerError } = await supabaseAdmin.from('buyers').select('id, email').eq('id', shopConversation.buyer_id).maybeSingle();
+
+  const { data: buyer, error: buyerError } = await supabaseAdmin
+    .from('buyers')
+    .select('id, email')
+    .eq('id', shopConversation.buyer_id)
+    .maybeSingle();
   if (buyerError) throw buyerError;
-  if (buyer?.email && user.email && buyer.email.toLowerCase() === user.email.toLowerCase()) return { kind: 'shop', table: SHOP_CALL_TABLE, conversation: shopConversation };
+  if (buyer?.email && user.email && buyer.email.toLowerCase() === user.email.toLowerCase()) {
+    return { kind: 'shop', table: SHOP_CALL_TABLE, conversation: shopConversation };
+  }
   return null;
 }
 
@@ -46,16 +75,39 @@ async function recipientFor(access, caller) {
   return shop?.owner_id || null;
 }
 
+async function enrichCaller(call) {
+  if (!call?.caller_id) return call;
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('id, full_name, phone, avatar_url')
+    .eq('id', call.caller_id)
+    .maybeSingle();
+  return { ...call, caller: profile || null, server_now: new Date().toISOString() };
+}
+
 async function incomingForUser(user) {
-  const { data: memberConversations, error: memberError } = await supabaseAdmin.from('member_conversations').select('id, member_one_id, member_two_id').or(`member_one_id.eq.${user.id},member_two_id.eq.${user.id}`);
+  const { data: memberConversations, error: memberError } = await supabaseAdmin
+    .from('member_conversations')
+    .select('id, member_one_id, member_two_id')
+    .or(`member_one_id.eq.${user.id},member_two_id.eq.${user.id}`);
   if (memberError) throw memberError;
+
   const memberIds = (memberConversations || []).map((row) => row.id);
   let memberCall = null;
   if (memberIds.length) {
-    const { data, error } = await supabaseAdmin.from(MEMBER_CALL_TABLE).select('*').in('conversation_id', memberIds).eq('status', 'ringing').neq('caller_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    const { data, error } = await supabaseAdmin
+      .from(MEMBER_CALL_TABLE)
+      .select('*')
+      .in('conversation_id', memberIds)
+      .eq('status', 'ringing')
+      .neq('caller_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
     if (error) throw error;
     memberCall = data || null;
   }
+
   const { data: ownedShops, error: ownedError } = await supabaseAdmin.from('shops').select('id').eq('owner_id', user.id);
   if (ownedError) throw ownedError;
   const ownedIds = (ownedShops || []).map((row) => row.id);
@@ -76,18 +128,32 @@ async function incomingForUser(user) {
     }
   }
   shopConversationIds = [...new Set(shopConversationIds)];
+
   let shopCall = null;
   if (shopConversationIds.length) {
-    const { data, error } = await supabaseAdmin.from(SHOP_CALL_TABLE).select('*').in('conversation_id', shopConversationIds).eq('status', 'ringing').neq('caller_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    const { data, error } = await supabaseAdmin
+      .from(SHOP_CALL_TABLE)
+      .select('*')
+      .in('conversation_id', shopConversationIds)
+      .eq('status', 'ringing')
+      .neq('caller_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
     if (error) throw error;
     shopCall = data || null;
   }
-  const candidates = [memberCall && { ...memberCall, conversation_kind: 'member' }, shopCall && { ...shopCall, conversation_kind: 'shop' }].filter(Boolean);
+
+  const candidates = [
+    memberCall && { ...memberCall, conversation_kind: 'member' },
+    shopCall && { ...shopCall, conversation_kind: 'shop' }
+  ].filter(Boolean);
   candidates.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-  return candidates[0] || null;
+  return candidates[0] ? enrichCaller(candidates[0]) : null;
 }
 
 export default async function handler(req, res) {
+  disableCache(res);
   try {
     if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase non configuré.' });
     const user = await requireUser(req);
@@ -95,25 +161,47 @@ export default async function handler(req, res) {
 
     if (req.method === 'GET') {
       const { conversationId, incoming } = req.query;
-      if (incoming === '1') return res.status(200).json(await incomingForUser(user));
+      if (incoming === '1') {
+        const incomingCall = await incomingForUser(user);
+        return res.status(200).json(incomingCall);
+      }
       if (!conversationId) return res.status(400).json({ error: 'conversationId requis' });
       const access = await resolveConversation(conversationId, user);
       if (!access) return res.status(403).json({ error: 'Conversation non autorisée' });
-      const { data, error } = await supabaseAdmin.from(access.table).select('*').eq('conversation_id', conversationId).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      const { data, error } = await supabaseAdmin
+        .from(access.table)
+        .select('*')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
       if (error) throw error;
-      return res.status(200).json(data ? { ...data, conversation_kind: access.kind } : null);
+      return res.status(200).json(data ? { ...data, conversation_kind: access.kind, server_now: new Date().toISOString() } : null);
     }
+
     if (req.method !== 'POST') return res.status(405).end();
     const { action, conversationId, callId, callType, signal, side } = req.body || {};
     if (!conversationId || !action) return res.status(400).json({ error: 'action et conversationId requis' });
+
     const access = await resolveConversation(conversationId, user);
     if (!access) return res.status(403).json({ error: 'Conversation non autorisée' });
     const table = access.table;
+
     if (action === 'start') {
       if (!signal || !['audio', 'video'].includes(callType)) return res.status(400).json({ error: 'Signal ou type d’appel invalide' });
-      await supabaseAdmin.from(table).update({ status: 'ended', ended_at: new Date().toISOString() }).eq('conversation_id', conversationId).in('status', ['ringing', 'connected']);
-      const { data, error } = await supabaseAdmin.from(table).insert({ conversation_id: conversationId, caller_id: user.id, call_type: callType, offer: signal, status: 'ringing' }).select().single();
+      await supabaseAdmin
+        .from(table)
+        .update({ status: 'ended', ended_at: new Date().toISOString() })
+        .eq('conversation_id', conversationId)
+        .in('status', ['ringing', 'connected']);
+
+      const { data, error } = await supabaseAdmin
+        .from(table)
+        .insert({ conversation_id: conversationId, caller_id: user.id, call_type: callType, offer: signal, status: 'ringing' })
+        .select()
+        .single();
       if (error) throw error;
+
       const recipientId = await recipientFor(access, user);
       let push = { sent: 0, skipped: true };
       if (recipientId) {
@@ -130,20 +218,34 @@ export default async function handler(req, res) {
           url: `https://www.wakhreek.com/appel?conversationId=${encodeURIComponent(conversationId)}`
         });
       }
-      return res.status(201).json({ ...data, conversation_kind: access.kind, push });
+      return res.status(201).json({ ...data, conversation_kind: access.kind, push, server_now: new Date().toISOString() });
     }
+
     if (!callId) return res.status(400).json({ error: 'callId requis' });
-    const { data: call, error: callError } = await supabaseAdmin.from(table).select('*').eq('id', callId).eq('conversation_id', conversationId).maybeSingle();
+    const { data: call, error: callError } = await supabaseAdmin
+      .from(table)
+      .select('*')
+      .eq('id', callId)
+      .eq('conversation_id', conversationId)
+      .maybeSingle();
     if (callError) throw callError;
     if (!call) return res.status(404).json({ error: 'Appel introuvable' });
     if (call.status === 'ended' && action !== 'end') return res.status(410).json({ error: 'Cet appel est terminé.' });
+
     if (action === 'answer') {
       if (!signal) return res.status(400).json({ error: 'Réponse invalide' });
       if (call.caller_id === user.id) return res.status(400).json({ error: 'Le correspondant doit répondre à cet appel' });
-      const { data, error } = await supabaseAdmin.from(table).update({ answer: signal, status: 'connected', answered_at: new Date().toISOString() }).eq('id', call.id).eq('status', 'ringing').select().single();
+      const { data, error } = await supabaseAdmin
+        .from(table)
+        .update({ answer: signal, status: 'connected', answered_at: new Date().toISOString() })
+        .eq('id', call.id)
+        .eq('status', 'ringing')
+        .select()
+        .single();
       if (error) throw error;
-      return res.status(200).json({ ...data, conversation_kind: access.kind });
+      return res.status(200).json({ ...data, conversation_kind: access.kind, server_now: new Date().toISOString() });
     }
+
     if (action === 'candidate') {
       if (!signal || !['caller', 'callee'].includes(side)) return res.status(400).json({ error: 'Candidat invalide' });
       const field = side === 'caller' ? 'caller_candidates' : 'callee_candidates';
@@ -152,11 +254,15 @@ export default async function handler(req, res) {
       if (error) throw error;
       return res.status(204).end();
     }
+
     if (action === 'end') {
       const { error } = await supabaseAdmin.from(table).update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', call.id);
       if (error) throw error;
       return res.status(204).end();
     }
+
     return res.status(400).json({ error: 'Action inconnue' });
-  } catch (error) { return jsonError(res, error); }
+  } catch (error) {
+    return jsonError(res, error);
+  }
 }
