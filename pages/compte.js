@@ -45,23 +45,42 @@ export default function Compte() {
       if (mode === 'signup') {
         if (phone.replace(/\D/g, '').length < 8) throw new Error('Entre un numéro de téléphone valide.');
         if (!acceptTerms) throw new Error('Tu dois accepter les règles de Wakh Reek pour créer un compte.');
+
+        // Vérification côté serveur AVANT de créer l'utilisateur Supabase.
+        // Un e-mail et un numéro de téléphone ne peuvent appartenir qu'à un seul compte.
+        const identityResponse = await fetch('/api/auth/check-identity', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, phone }),
+        });
+        const identity = await identityResponse.json().catch(() => ({}));
+        if (!identityResponse.ok) throw new Error(identity.error || 'Impossible de vérifier ce compte.');
+
         const { data, error } = await supabaseBrowser.auth.signUp({
-          email,
+          email: email.trim().toLowerCase(),
           password,
           options: {
             emailRedirectTo: 'https://wakhreek.com/auth/callback',
-            data: { full_name: name, role, phone },
+            data: { full_name: name.trim(), role, phone: phone.trim() },
           },
         });
         if (error) throw error;
         if (data.user) {
           const token = data.session?.access_token;
-          if (token) await fetch('/api/members', { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ fullName: name, phone, acceptedTerms: true }) });
+          if (token) {
+            const profileResponse = await fetch('/api/members', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ fullName: name, phone, acceptedTerms: true }),
+            });
+            const profileResult = await profileResponse.json().catch(() => ({}));
+            if (!profileResponse.ok) throw new Error(profileResult.error || 'Impossible d’enregistrer le numéro de téléphone.');
+          }
         }
         if (data.session) window.location.href = role === 'seller' ? '/vendeur' : '/';
         else setMessage('Compte créé. Vérifie ton e-mail puis connecte-toi.');
       } else {
-        const { error } = await supabaseBrowser.auth.signInWithPassword({ email, password });
+        const { error } = await supabaseBrowser.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
         if (error) throw error;
         window.location.href = '/';
       }
