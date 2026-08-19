@@ -13,6 +13,11 @@ function disableCache(res) {
   res.setHeader('Surrogate-Control', 'no-store');
 }
 
+function rejectWithLog(res, status, error, context = {}) {
+  console.error('[CALLS_REJECT]', { status, error, ...context });
+  return res.status(status).json({ error });
+}
+
 async function expireUnansweredCalls() {
   const cutoff = new Date(Date.now() - CALL_TIMEOUT_MS).toISOString();
   const endedAt = new Date().toISOString();
@@ -154,20 +159,23 @@ async function incomingForUser(user) {
 
 export default async function handler(req, res) {
   disableCache(res);
+  console.error('[CALLS_REQUEST]', { method: req.method, query: req.query, hasAuth: Boolean(req.headers?.authorization) });
   try {
-    if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase non configuré.' });
+    if (!supabaseAdmin) return rejectWithLog(res, 503, 'Supabase non configuré.', { method: req.method, query: req.query });
     const user = await requireUser(req);
+    console.error('[CALLS_USER]', { userId: user?.id, email: user?.email, method: req.method, query: req.query });
     await expireUnansweredCalls();
 
     if (req.method === 'GET') {
       const { conversationId, incoming } = req.query;
-      if (incoming === '1') {
+      if (String(incoming) === '1') {
         const incomingCall = await incomingForUser(user);
+        console.error('[CALLS_INCOMING_OK]', { userId: user.id, found: Boolean(incomingCall), callId: incomingCall?.id || null });
         return res.status(200).json(incomingCall);
       }
-      if (!conversationId) return res.status(400).json({ error: 'conversationId requis' });
+      if (!conversationId) return rejectWithLog(res, 400, 'conversationId requis', { method: req.method, query: req.query, incoming });
       const access = await resolveConversation(conversationId, user);
-      if (!access) return res.status(403).json({ error: 'Conversation non autorisée' });
+      if (!access) return rejectWithLog(res, 403, 'Conversation non autorisée', { userId: user.id, conversationId });
       const { data, error } = await supabaseAdmin
         .from(access.table)
         .select('*')
@@ -179,16 +187,20 @@ export default async function handler(req, res) {
       return res.status(200).json(data ? { ...data, conversation_kind: access.kind, server_now: new Date().toISOString() } : null);
     }
 
-    if (req.method !== 'POST') return res.status(405).end();
+    if (req.method !== 'POST') {
+      console.error('[CALLS_REJECT]', { status: 405, error: 'Méthode non autorisée', method: req.method });
+      return res.status(405).end();
+    }
+
     const { action, conversationId, callId, callType, signal, side } = req.body || {};
-    if (!conversationId || !action) return res.status(400).json({ error: 'action et conversationId requis' });
+    if (!conversationId || !action) return rejectWithLog(res, 400, 'action et conversationId requis', { action, conversationId });
 
     const access = await resolveConversation(conversationId, user);
-    if (!access) return res.status(403).json({ error: 'Conversation non autorisée' });
+    if (!access) return rejectWithLog(res, 403, 'Conversation non autorisée', { userId: user.id, conversationId, action });
     const table = access.table;
 
     if (action === 'start') {
-      if (!signal || !['audio', 'video'].includes(callType)) return res.status(400).json({ error: 'Signal ou type d’appel invalide' });
+      if (!signal || !['audio', 'video'].includes(callType)) return rejectWithLog(res, 400, 'Signal ou type d’appel invalide', { callType, hasSignal: Boolean(signal) });
       await supabaseAdmin
         .from(table)
         .update({ status: 'ended', ended_at: new Date().toISOString() })
@@ -218,10 +230,11 @@ export default async function handler(req, res) {
           url: `https://www.wakhreek.com/appel?conversationId=${encodeURIComponent(conversationId)}`
         });
       }
+      console.error('[CALLS_START_RESULT]', { callId: data.id, recipientId, push });
       return res.status(201).json({ ...data, conversation_kind: access.kind, push, server_now: new Date().toISOString() });
     }
 
-    if (!callId) return res.status(400).json({ error: 'callId requis' });
+    if (!callId) return rejectWithLog(res, 400, 'callId requis', { action, conversationId });
     const { data: call, error: callError } = await supabaseAdmin
       .from(table)
       .select('*')
@@ -229,12 +242,12 @@ export default async function handler(req, res) {
       .eq('conversation_id', conversationId)
       .maybeSingle();
     if (callError) throw callError;
-    if (!call) return res.status(404).json({ error: 'Appel introuvable' });
-    if (call.status === 'ended' && action !== 'end') return res.status(410).json({ error: 'Cet appel est terminé.' });
+    if (!call) return rejectWithLog(res, 404, 'Appel introuvable', { callId, conversationId });
+    if (call.status === 'ended' && action !== 'end') return rejectWithLog(res, 410, 'Cet appel est terminé.', { callId, action });
 
     if (action === 'answer') {
-      if (!signal) return res.status(400).json({ error: 'Réponse invalide' });
-      if (call.caller_id === user.id) return res.status(400).json({ error: 'Le correspondant doit répondre à cet appel' });
+      if (!signal) return rejectWithLog(res, 400, 'Réponse invalide', { callId });
+      if (call.caller_id === user.id) return rejectWithLog(res, 400, 'Le correspondant doit répondre à cet appel', { callId, userId: user.id });
       const { data, error } = await supabaseAdmin
         .from(table)
         .update({ answer: signal, status: 'connected', answered_at: new Date().toISOString() })
@@ -247,7 +260,7 @@ export default async function handler(req, res) {
     }
 
     if (action === 'candidate') {
-      if (!signal || !['caller', 'callee'].includes(side)) return res.status(400).json({ error: 'Candidat invalide' });
+      if (!signal || !['caller', 'callee'].includes(side)) return rejectWithLog(res, 400, 'Candidat invalide', { callId, side, hasSignal: Boolean(signal) });
       const field = side === 'caller' ? 'caller_candidates' : 'callee_candidates';
       const candidates = Array.isArray(call[field]) ? call[field] : [];
       const { error } = await supabaseAdmin.from(table).update({ [field]: [...candidates, signal] }).eq('id', call.id);
@@ -261,8 +274,16 @@ export default async function handler(req, res) {
       return res.status(204).end();
     }
 
-    return res.status(400).json({ error: 'Action inconnue' });
+    return rejectWithLog(res, 400, 'Action inconnue', { action, conversationId, callId });
   } catch (error) {
+    console.error('[CALLS_EXCEPTION]', {
+      method: req.method,
+      query: req.query,
+      name: error?.name,
+      message: error?.message,
+      code: error?.code,
+      stack: error?.stack
+    });
     return jsonError(res, error);
   }
 }
