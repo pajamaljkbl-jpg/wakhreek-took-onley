@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { getSupabaseBrowser } from '../lib/supabase-browser';
+import { authFetch, isAuthError } from '../lib/auth-fetch';
 
 const BLUE = '#019EE5';
 
@@ -34,20 +35,21 @@ export default function Appel() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  const authHeaders = () => session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
-
   useEffect(() => {
     if (!conversationId || !session) return;
     let active = true;
     const refresh = async () => {
       try {
-        const res = await fetch(`/api/calls?conversationId=${encodeURIComponent(conversationId)}`, { headers: authHeaders() });
+        const res = await authFetch(`/api/calls?conversationId=${encodeURIComponent(conversationId)}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Impossible de joindre la salle');
         if (active) setCall(data);
         if (data && peerRef.current) await applyRemoteSignals(data);
         if (active && !data) setMessage('Salle prête. Tu peux démarrer un appel.');
-      } catch (error) { if (active) setMessage(error.message); }
+      } catch (error) {
+        if (isAuthError(error)) { if (active) window.location.href = '/compte'; return; }
+        if (active) setMessage(error.message);
+      }
     };
     refresh();
     const timer = setInterval(refresh, 1500);
@@ -65,11 +67,15 @@ export default function Appel() {
   useEffect(() => () => closeLocalOnly(), []);
 
   async function api(body) {
-    if (!session?.access_token) throw new Error('Connexion requise');
-    const res = await fetch('/api/calls', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ conversationId, ...body }) });
-    const data = res.status === 204 ? null : await res.json();
-    if (!res.ok) throw new Error(data?.error || 'Erreur pendant l’appel');
-    return data;
+    try {
+      const res = await authFetch('/api/calls', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ conversationId, ...body }) });
+      const data = res.status === 204 ? null : await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Erreur pendant l’appel');
+      return data;
+    } catch (error) {
+      if (isAuthError(error)) window.location.href = '/compte';
+      throw error;
+    }
   }
 
   async function createPeer(side, type) {
