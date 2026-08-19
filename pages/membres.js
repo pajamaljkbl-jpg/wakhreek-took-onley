@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { getSupabaseBrowser } from '../lib/supabase-browser';
+import { authFetch, isAuthError } from '../lib/auth-fetch';
 
 const BLUE = '#019EE5';
 const btn = { border: 0, borderRadius: 12, padding: '11px 13px', background: BLUE, color: '#fff', fontWeight: 800, cursor: 'pointer' };
@@ -13,8 +14,14 @@ export default function Membres() {
   const [error, setError] = useState(''); const recorderRef = useRef(null); const [recording, setRecording] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null); const [notificationsReady, setNotificationsReady] = useState(false);
   const ringTimerRef = useRef(null); const audioContextRef = useRef(null); const notifiedCallRef = useRef(null);
-  const auth = () => ({ Authorization: `Bearer ${session?.access_token}` });
-  async function api(path, options = {}) { const r = await fetch(path, { ...options, headers: { ...auth(), ...(options.headers || {}) } }); const data = await r.json().catch(() => ({})); if (!r.ok) throw new Error(data.error || 'Erreur'); return data; }
+  async function api(path, options = {}) {
+    try {
+      const r = await authFetch(path, options);
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || 'Erreur');
+      return data;
+    } catch (e) { if (isAuthError(e)) window.location.href = '/compte'; throw e; }
+  }
   async function refresh() { if (!session) return; try { const [profile, list, saved] = await Promise.all([api('/api/members'), api('/api/member-conversations'), api('/api/members/contacts')]); setMe(profile); setConversations(list); setContacts(saved); } catch (e) { setError(e.message); } }
   useEffect(() => { const client = getSupabaseBrowser(); client.auth.getSession().then(({ data }) => setSession(data.session)); const { data: listener } = client.auth.onAuthStateChange((_event, next) => setSession(next)); return () => listener.subscription.unsubscribe(); }, []);
   useEffect(() => { refresh(); }, [session]);
@@ -80,7 +87,7 @@ export default function Membres() {
   async function contact(memberId) { try { await api('/api/members/contacts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ memberId }) }); await refresh(); } catch (e) { setError(e.message); } }
   async function block(memberId) { if (!confirm('Bloquer ce membre ? Il ne pourra plus te contacter ni voir tes stories.')) return; try { await api('/api/members/blocks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ memberId }) }); setActive(null); await refresh(); } catch (e) { setError(e.message); } }
   async function send(content = text, messageType = 'text', mediaUrl = null, durationSeconds = null) { try { if (!active) return; const message = await api('/api/member-messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ conversationId: active.id, content, messageType, mediaUrl, durationSeconds }) }); setMessages((old) => [...old, message]); setText(''); } catch (e) { setError(e.message); } }
-  async function upload(file, folder) { const source = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); }); const r = await fetch('/api/uploads', { method: 'POST', headers: { 'Content-Type': 'application/json', ...auth() }, body: JSON.stringify({ fileBase64: source, folder }) }); const data = await r.json(); if (!r.ok) throw new Error(data.error || 'Upload impossible'); return data.url; }
+  async function upload(file, folder) { const source = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); }); const r = await authFetch('/api/uploads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileBase64: source, folder }) }); const data = await r.json(); if (!r.ok) throw new Error(data.error || 'Upload impossible'); return data.url; }
   async function pickMedia(e) { const file = e.target.files?.[0]; if (!file) return; try { const type = file.type.startsWith('video/') ? 'video' : 'image'; const url = await upload(file, `members/${type}`); await send('', type, url); } catch (err) { setError(err.message); } e.target.value = ''; }
 
   async function toggleAudio() {
@@ -98,7 +105,7 @@ export default function Membres() {
       recorder.onerror = () => { stream.getTracks().forEach((t) => t.stop()); setRecording(false); setError('Erreur pendant l’enregistrement audio.'); };
       recorder.onstop = async () => { stream.getTracks().forEach((t) => t.stop()); setRecording(false); recorderRef.current = null; try { if (!chunks.length) throw new Error('Aucun son enregistré. Réessaie en parlant après le démarrage.'); const finalType = recorder.mimeType || mimeType || 'audio/webm'; const ext = finalType.includes('mp4') ? 'm4a' : finalType.includes('ogg') ? 'ogg' : 'webm'; const blob = new Blob(chunks, { type: finalType }); const file = new File([blob], `vocal.${ext}`, { type: finalType }); const url = await upload(file, 'members/audio'); await send('', 'audio', url, Math.max(1, Math.ceil((Date.now() - startedAt) / 1000))); } catch (err) { setError(err.message || 'Impossible d’envoyer le message vocal.'); } };
       recorder.start(250); recorderRef.current = recorder; setRecording(true);
-    } catch (err) { const name = err?.name || ''; if (name === 'NotAllowedError' || name === 'PermissionDeniedError') setError('Autorise le microphone dans les réglages de Wakhreek puis réessaie.'); else if (name === 'NotFoundError') setError('Aucun microphone détecté sur cet appareil.'); else setError(err?.message || 'Impossible d’utiliser le microphone.'); }
+    } catch (err) { const name = err?.name || ''; if (name === 'NotAllowedError' || name === 'PermissionDeniedError') setError('Autorise le microphone dans les réglages de Wakh Reek puis réessaie.'); else if (name === 'NotFoundError') setError('Aucun microphone détecté sur cet appareil.'); else setError(err?.message || 'Impossible d’utiliser le microphone.'); }
   }
 
   if (!session) return <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', fontFamily: 'system-ui', background: '#f3f7fa', padding: 20 }}><section style={{ maxWidth: 460, background: 'white', borderRadius: 20, padding: 28, textAlign: 'center' }}><h1>Wakh Reek Membres</h1><p>Crée un compte ou connecte-toi pour discuter avec les membres enregistrés.</p><a href="/compte" style={{ ...btn, display: 'inline-block', textDecoration: 'none' }}>Accéder à mon compte</a></section></main>;
