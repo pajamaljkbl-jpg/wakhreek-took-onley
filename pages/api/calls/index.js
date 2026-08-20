@@ -5,6 +5,12 @@ import { sendPushToUser, userIdFromEmail } from '../../../lib/push-server';
 const MEMBER_CALL_TABLE = 'member_call_sessions';
 const SHOP_CALL_TABLE = 'call_sessions';
 const CALL_TIMEOUT_MS = 45_000;
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.wakhreek.com').replace(/\/$/, '');
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isUuid(value) {
+  return typeof value === 'string' && UUID_RE.test(value);
+}
 
 function disableCache(res) {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
@@ -260,6 +266,7 @@ export default async function handler(req, res) {
         return res.status(200).json(incomingCall);
       }
       if (!conversationId) return rejectWithLog(res, 400, 'conversationId requis', { method: req.method, query: req.query, incoming });
+      if (!isUuid(conversationId)) return rejectWithLog(res, 400, 'conversationId invalide', { conversationId });
       const access = await resolveConversation(conversationId, user);
       if (!access) return rejectWithLog(res, 403, 'Conversation non autorisée', { userId: user.id, conversationId });
       const { data, error } = await supabaseAdmin
@@ -280,6 +287,7 @@ export default async function handler(req, res) {
 
     const { action, conversationId, callId, callType, signal, side } = req.body || {};
     if (!conversationId || !action) return rejectWithLog(res, 400, 'action et conversationId requis', { action, conversationId });
+    if (!isUuid(conversationId)) return rejectWithLog(res, 400, 'conversationId invalide', { action, conversationId });
 
     const access = await resolveConversation(conversationId, user);
     if (!access) return rejectWithLog(res, 403, 'Conversation non autorisée', { userId: user.id, conversationId, action });
@@ -313,7 +321,7 @@ export default async function handler(req, res) {
           callId: data.id,
           tag: `wakhreek-call-${data.id}`,
           timeoutMs: CALL_TIMEOUT_MS,
-          url: `https://www.wakhreek.com/appel?conversationId=${encodeURIComponent(conversationId)}`
+          url: `${SITE_URL}/appel?conversationId=${encodeURIComponent(conversationId)}`
         });
       }
       console.error('[CALLS_START_RESULT]', { callId: data.id, recipientId, push });
@@ -321,6 +329,7 @@ export default async function handler(req, res) {
     }
 
     if (!callId) return rejectWithLog(res, 400, 'callId requis', { action, conversationId });
+    if (!isUuid(callId)) return rejectWithLog(res, 400, 'callId invalide', { action, callId });
     const { data: call, error: callError } = await supabaseAdmin
       .from(table)
       .select('*')

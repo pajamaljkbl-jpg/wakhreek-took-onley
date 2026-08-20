@@ -4,6 +4,8 @@ import { authFetch, isAuthError } from '../lib/auth-fetch';
 import { requestWakeLock } from '../lib/wake-lock';
 
 const BLUE = '#019EE5';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isUuid(value) { return typeof value === 'string' && UUID_RE.test(value); }
 
 export default function Appel() {
   const [conversationId, setConversationId] = useState('');
@@ -31,6 +33,7 @@ export default function Appel() {
     const id = params.get('conversationId');
     const mode = params.get('mode');
     if (!id) setMessage('Lien d’appel incomplet. Ouvre l’appel depuis une discussion Wakh Reek.');
+    else if (!isUuid(id)) setMessage('Lien d’appel invalide. Ouvre l’appel depuis une discussion Wakh Reek.');
     else setConversationId(id);
     if (mode === 'audio' || mode === 'video') setRequestedMode(mode);
     return () => listener.subscription.unsubscribe();
@@ -72,6 +75,7 @@ export default function Appel() {
 
   async function api(body) {
     try {
+      if (!isUuid(conversationId)) throw new Error('Lien d’appel invalide. Ouvre l’appel depuis une discussion Wakh Reek.');
       const res = await authFetch('/api/calls', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ conversationId, ...body }) });
       const data = res.status === 204 ? null : await res.json();
       if (!res.ok) throw new Error(data?.error || 'Erreur pendant l’appel');
