@@ -6,7 +6,7 @@ self.addEventListener('push', (event) => {
   try { data = event.data ? event.data.json() : {}; } catch (_) { data = {}; }
   const title = data.title || '📞 Appel Wakh Reek';
   const tag = data.tag || `wakhreek-call-${data.callId || Date.now()}`;
-  const timeoutMs = Number(data.timeoutMs) || 30000;
+  const timeoutMs = Number(data.timeoutMs) || 45000;
   const options = {
     body: data.body || 'Appel entrant',
     icon: '/icon-192.png',

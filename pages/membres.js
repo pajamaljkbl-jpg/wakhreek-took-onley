@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { getSupabaseBrowser } from '../lib/supabase-browser';
 import { authFetch, isAuthError } from '../lib/auth-fetch';
+import { requestWakeLock } from '../lib/wake-lock';
 
 const BLUE = '#019EE5';
 const btn = { border: 0, borderRadius: 12, padding: '11px 13px', background: BLUE, color: '#fff', fontWeight: 800, cursor: 'pointer' };
@@ -53,6 +54,9 @@ export default function Membres() {
     const timer = setInterval(checkIncoming, 1500);
     return () => { alive = false; clearInterval(timer); stopRinging(); };
   }, [session]);
+
+  // Garde l'écran allumé tant qu'un appel entrant sonne.
+  useEffect(() => (incomingCall ? requestWakeLock() : undefined), [incomingCall]);
 
   useEffect(() => {
     if (typeof Notification !== 'undefined' && Notification.permission === 'granted') setNotificationsReady(true);

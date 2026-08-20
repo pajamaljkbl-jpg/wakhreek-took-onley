@@ -51,7 +51,7 @@ class WakhreekMessagingService : FirebaseMessagingService() {
             .setAutoCancel(false)
             .setContentIntent(pending)
             .setFullScreenIntent(pending, true)
-            .setTimeoutAfter(30_000)
+            .setTimeoutAfter(45_000)
             .build()
 
         manager.notify(callId.hashCode(), notification)

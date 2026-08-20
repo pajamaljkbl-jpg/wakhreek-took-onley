@@ -4,7 +4,7 @@ import { sendPushToUser, userIdFromEmail } from '../../../lib/push-server';
 
 const MEMBER_CALL_TABLE = 'member_call_sessions';
 const SHOP_CALL_TABLE = 'call_sessions';
-const CALL_TIMEOUT_MS = 30_000;
+const CALL_TIMEOUT_MS = 45_000;
 
 function disableCache(res) {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { getSupabaseBrowser } from '../lib/supabase-browser';
 import { authFetch, isAuthError } from '../lib/auth-fetch';
+import { requestWakeLock } from '../lib/wake-lock';
 
 const BLUE = '#019EE5';
 
@@ -65,6 +66,9 @@ export default function Appel() {
   }, [session, conversationId, requestedMode, call]);
 
   useEffect(() => () => closeLocalOnly(), []);
+
+  // Garde l'écran allumé tant que la page d'appel est ouverte.
+  useEffect(() => requestWakeLock(), []);
 
   async function api(body) {
     try {
