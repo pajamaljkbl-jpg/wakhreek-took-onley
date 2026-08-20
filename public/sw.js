@@ -4,25 +4,27 @@ self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim(
 self.addEventListener('push', (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch (_) { data = {}; }
-  const title = data.title || '📞 Appel Wakh Reek';
-  const tag = data.tag || `wakhreek-call-${data.callId || Date.now()}`;
+  const isCall = data.kind === 'call';
+  const title = data.title || (isCall ? '📞 Appel Wakh Reek' : 'Wakh Reek');
+  const tag = data.tag || `wakhreek-${data.kind || 'push'}-${data.callId || Date.now()}`;
   const timeoutMs = Number(data.timeoutMs) || 45000;
   const options = {
-    body: data.body || 'Appel entrant',
+    body: data.body || (isCall ? 'Appel entrant' : ''),
     icon: '/icon-192.png',
     badge: '/icon-192.png',
     tag,
     renotify: true,
-    requireInteraction: true,
-    vibrate: [700, 250, 700, 250, 700, 500, 900],
-    data: { url: data.url || '/', callId: data.callId || null, expiresAt: Date.now() + timeoutMs },
-    actions: [
+    requireInteraction: isCall,
+    vibrate: isCall ? [700, 250, 700, 250, 700, 500, 900] : [120, 60, 120],
+    data: { url: data.url || '/', callId: data.callId || null, kind: data.kind || '', expiresAt: Date.now() + timeoutMs },
+    actions: isCall ? [
       { action: 'answer', title: '📞 Répondre' },
       { action: 'open', title: 'Ouvrir' }
-    ]
+    ] : []
   };
   event.waitUntil((async () => {
     await self.registration.showNotification(title, options);
+    if (!isCall) return;
     await new Promise((resolve) => setTimeout(resolve, timeoutMs));
     const notifications = await self.registration.getNotifications({ tag });
     notifications.forEach((notification) => notification.close());

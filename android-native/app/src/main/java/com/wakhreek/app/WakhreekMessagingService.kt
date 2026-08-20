@@ -14,8 +14,13 @@ import com.google.firebase.messaging.RemoteMessage
 class WakhreekMessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         val data = message.data
-        if (data["kind"] != "call") return
+        when (data["kind"]) {
+            "call" -> showIncomingCall(data)
+            "missed_call" -> showMissedCall(data)
+        }
+    }
 
+    private fun showIncomingCall(data: Map<String, String>) {
         val callId = data["callId"] ?: System.currentTimeMillis().toString()
         val caller = data["caller"] ?: "Wakhreek"
         val callType = data["callType"] ?: "audio"
@@ -55,5 +60,34 @@ class WakhreekMessagingService : FirebaseMessagingService() {
             .build()
 
         manager.notify(callId.hashCode(), notification)
+    }
+
+    private fun showMissedCall(data: Map<String, String>) {
+        val caller = data["caller"] ?: "Wakhreek"
+        val url = data["url"] ?: "https://www.wakhreek.com"
+        val notifId = ("missed-$caller").hashCode()
+
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channel = NotificationChannel("missed_calls", "Appels manqués", NotificationManager.IMPORTANCE_DEFAULT).apply {
+            description = "Appels manqués Wakhreek"
+        }
+        manager.createNotificationChannel(channel)
+
+        val intent = Intent(this, MainActivity::class.java).apply {
+            putExtra("url", url)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pending = PendingIntent.getActivity(this, notifId, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+
+        val notification = NotificationCompat.Builder(this, "missed_calls")
+            .setSmallIcon(android.R.drawable.stat_notify_missed_call)
+            .setContentTitle("Appel manqué")
+            .setContentText("$caller vous a appelé")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .setContentIntent(pending)
+            .build()
+
+        manager.notify(notifId, notification)
     }
 }

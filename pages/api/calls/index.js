@@ -21,10 +21,96 @@ function rejectWithLog(res, status, error, context = {}) {
 async function expireUnansweredCalls() {
   const cutoff = new Date(Date.now() - CALL_TIMEOUT_MS).toISOString();
   const endedAt = new Date().toISOString();
-  await Promise.all([
-    supabaseAdmin.from(MEMBER_CALL_TABLE).update({ status: 'ended', ended_at: endedAt }).eq('status', 'ringing').lt('created_at', cutoff),
-    supabaseAdmin.from(SHOP_CALL_TABLE).update({ status: 'ended', ended_at: endedAt }).eq('status', 'ringing').lt('created_at', cutoff)
+
+  // Termine les appels expirés ET récupère leurs données (une seule fois chacun,
+  // grâce à la condition status='ringing' qui verrouille la ligne).
+  const [{ data: memberCalls }, { data: shopCalls }] = await Promise.all([
+    supabaseAdmin.from(MEMBER_CALL_TABLE).update({ status: 'ended', ended_at: endedAt }).eq('status', 'ringing').lt('created_at', cutoff).select(),
+    supabaseAdmin.from(SHOP_CALL_TABLE).update({ status: 'ended', ended_at: endedAt }).eq('status', 'ringing').lt('created_at', cutoff).select(),
   ]);
+
+  // Prévient l'appelé : "📞 Appel manqué de X".
+  await Promise.allSettled([
+    ...(memberCalls || []).map((call) => notifyMissedMemberCall(call)),
+    ...(shopCalls || []).map((call) => notifyMissedShopCall(call)),
+  ]);
+}
+
+async function callerName(callerId) {
+  if (!callerId) return 'Un membre Wakh Reek';
+  const { data } = await supabaseAdmin
+    .from('profiles')
+    .select('full_name, phone')
+    .eq('id', callerId)
+    .maybeSingle();
+  return data?.full_name || data?.phone || 'Un membre Wakh Reek';
+}
+
+async function notifyMissedMemberCall(call) {
+  try {
+    const { data: conv } = await supabaseAdmin
+      .from('member_conversations')
+      .select('member_one_id, member_two_id')
+      .eq('id', call.conversation_id)
+      .maybeSingle();
+    if (!conv) return;
+    const recipientId = conv.member_one_id === call.caller_id ? conv.member_two_id : conv.member_one_id;
+    if (!recipientId) return;
+    const name = await callerName(call.caller_id);
+    await sendPushToUser(recipientId, {
+      kind: 'missed_call',
+      title: '📞 Appel manqué',
+      body: `${name} a tenté de vous joindre`,
+      caller: name,
+      callType: call.call_type || 'audio',
+      callId: call.id,
+      tag: `wakhreek-missed-${call.id}`,
+      url: `${SITE_URL}/membres`,
+    });
+  } catch (error) {
+    console.error('[CALLS_MISSED_MEMBER]', error?.message || error);
+  }
+}
+
+async function notifyMissedShopCall(call) {
+  try {
+    const { data: conv } = await supabaseAdmin
+      .from('conversations')
+      .select('buyer_id, shop_id')
+      .eq('id', call.conversation_id)
+      .maybeSingle();
+    if (!conv) return;
+    const { data: shop } = await supabaseAdmin
+      .from('shops')
+      .select('owner_id')
+      .eq('id', conv.shop_id)
+      .maybeSingle();
+    let recipientId = null;
+    if (shop?.owner_id && shop.owner_id !== call.caller_id) {
+      recipientId = shop.owner_id; // l'appelant est l'acheteur → prévient le vendeur
+    } else if (shop?.owner_id && shop.owner_id === call.caller_id) {
+      const { data: buyer } = await supabaseAdmin
+        .from('buyers')
+        .select('email')
+        .eq('id', conv.buyer_id)
+        .maybeSingle();
+      recipientId = await userIdFromEmail(buyer?.email); // l'appelant est le vendeur → prévient l'acheteur
+    }
+    if (!recipientId) return;
+    const name = await callerName(call.caller_id);
+    await sendPushToUser(recipientId, {
+      kind: 'missed_call',
+      title: '📞 Appel manqué',
+      body: `${name} a tenté de vous joindre`,
+      caller: name,
+      callType: call.call_type || 'audio',
+      callId: call.id,
+      tag: `wakhreek-missed-${call.id}`,
+      url: `${SITE_URL}/vendeur`,
+    });
+  } catch (error) {
+    console.error('[CALLS_MISSED_SHOP]', error?.message || error);
+  }
 }
 
 async function resolveConversation(conversationId, user) {
