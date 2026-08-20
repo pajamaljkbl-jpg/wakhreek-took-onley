@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getSupabaseBrowser } from '../lib/supabase-browser';
+import { CATEGORIES } from '../lib/categories';
 
 const BLUE = '#019EE5';
 const input = { width: '100%', padding: 12, marginBottom: 10, border: '1px solid #ddd', borderRadius: 12, boxSizing: 'border-box' };
@@ -79,7 +80,10 @@ export default function Boutique() {
         <input style={input} name="name" value={form.name} onChange={change} placeholder="Nom de la boutique *" required />
         <input style={input} name="city" value={form.city} onChange={change} placeholder="Ville *" required />
         <input style={input} name="quartier" value={form.quartier} onChange={change} placeholder="Quartier" />
-        <input style={input} name="category" value={form.category} onChange={change} placeholder="Catégorie" />
+        <select style={input} name="category" value={form.category} onChange={change} required>
+          <option value="">Choisis ta filière *</option>
+          {CATEGORIES.map((c) => <option key={c.id} value={c.label}>{c.emoji} {c.label}</option>)}
+        </select>
         <input style={input} name="wave_number" value={form.wave_number} onChange={change} placeholder="Numéro Wave *" required />
         <input style={input} name="om_number" value={form.om_number} onChange={change} placeholder="Numéro Orange Money" />
         <textarea style={{ ...input, minHeight: 90 }} name="description" value={form.description} onChange={change} placeholder="Description" />

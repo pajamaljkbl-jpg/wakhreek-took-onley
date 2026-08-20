@@ -3,7 +3,7 @@ import { supabaseAdmin } from '../../../lib/supabase';
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     const { shopId, q, category } = req.query;
-    let query = supabaseAdmin.from('products').select('*, shops(id,name,city,quartier,wave_number,qr_code_url)').eq('active', true).order('created_at', { ascending: false });
+    let query = supabaseAdmin.from('products').select('*, shops(id,name,city,quartier,category,wave_number,qr_code_url)').eq('active', true).order('created_at', { ascending: false });
     if (shopId) query = query.eq('shop_id', shopId);
     if (category) query = query.eq('category', category);
     if (q) query = query.ilike('name', `%${String(q).slice(0, 80)}%`);
