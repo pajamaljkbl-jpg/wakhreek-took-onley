@@ -3,6 +3,9 @@ import { getSupabaseBrowser } from '../lib/supabase-browser';
 
 const BLUE = '#019EE5';
 const field = { width: '100%', boxSizing: 'border-box', padding: 13, border: '1px solid #d7dde5', borderRadius: 12, marginBottom: 10, fontSize: 16 };
+// Domaine unique Wakh Reek (sans "/" final). Garder UNE seule adresse partout,
+// sinon la session Supabase est perdue quand on passe de wakhreek.com à www.wakhreek.com.
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.wakhreek.com').replace(/\/$/, '');
 
 export default function Compte() {
   const [mode, setMode] = useState('login');
@@ -25,7 +28,7 @@ export default function Compte() {
     try {
       const supabaseBrowser = getSupabaseBrowser();
       const { error } = await supabaseBrowser.auth.resetPasswordForEmail(email, {
-        redirectTo: 'https://wakhreek.com/reset-password',
+        redirectTo: `${SITE_URL}/reset-password`,
       });
       if (error) throw error;
       setMessage('Lien de réinitialisation envoyé. Vérifie ta boîte e-mail.');
@@ -60,7 +63,7 @@ export default function Compte() {
           email: email.trim().toLowerCase(),
           password,
           options: {
-            emailRedirectTo: 'https://wakhreek.com/auth/callback',
+            emailRedirectTo: `${SITE_URL}/auth/callback`,
             data: { full_name: name.trim(), role, phone: phone.trim() },
           },
         });
@@ -92,6 +95,7 @@ export default function Compte() {
   return <main style={{ minHeight: '100vh', background: 'linear-gradient(135deg,#e10600,#ff6a00,#ffcc00)', padding: 20, display: 'grid', placeItems: 'center', fontFamily: 'Inter,system-ui,sans-serif' }}>
     <section style={{ width: '100%', maxWidth: 440, background: 'white', padding: 28, borderRadius: 24, boxShadow: '0 16px 50px rgba(0,0,0,.2)' }}>
       <a href="/" style={{ color: BLUE }}>← Retour</a>
+      <img src="/hero-compte.png" alt="Wakh Reek" style={{ width: 110, height: 110, margin: '10px auto 14px', borderRadius: 24, objectFit: 'cover', display: 'block', boxShadow: '0 10px 26px rgba(0,0,0,.16)' }} />
       <h1 style={{ marginBottom: 6 }}>{mode === 'login' ? 'Connexion' : 'Créer un compte'}</h1>
       <p style={{ color: '#657080', marginTop: 0 }}>Wakh Reek — commerces et échanges de confiance.</p>
       <form onSubmit={submit}>
