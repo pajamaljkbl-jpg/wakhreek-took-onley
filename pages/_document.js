@@ -12,7 +12,7 @@ export default function Document() {
         <link rel="manifest" href="/manifest.json" />
         <link
           rel="apple-touch-icon"
-          href="/exec-73f48906-8ed1-4886-81ea-0c0f949bae9d.png"
+          href="/icon-192.png"
         />
       </Head>
       <body style={{ margin: 0, width: '100%', overflowX: 'hidden' }}>
