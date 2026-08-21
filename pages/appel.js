@@ -153,6 +153,8 @@ export default function Appel() {
       peer.callId = call.id;
       await peer.setRemoteDescription(new RTCSessionDescription(call.offer));
       remoteDescriptionSet.current = true;
+      // Applique immédiatement les candidats déjà reçus pendant l'ouverture caméra/micro.
+      await applyRemoteSignals(call);
       const answer = await peer.createAnswer();
       await peer.setLocalDescription(answer);
       const updated = await api({ action: 'answer', callId: call.id, signal: peer.localDescription.toJSON() });
@@ -170,12 +172,22 @@ export default function Appel() {
       await peer.setRemoteDescription(new RTCSessionDescription(updated.answer));
       remoteDescriptionSet.current = true;
     }
+
+    // Un candidat ICE ne peut être ajouté qu'après setRemoteDescription.
+    // S'il arrive trop tôt (fréquent sur mobile en vidéo), on le laisse non marqué
+    // pour que le prochain rafraîchissement puisse le réessayer.
+    if (!peer.remoteDescription?.type) return;
+
     const candidates = roleRef.current === 'caller' ? updated.callee_candidates : updated.caller_candidates;
     for (const candidate of candidates || []) {
       const key = JSON.stringify(candidate);
       if (candidateKeys.current.has(key)) continue;
-      candidateKeys.current.add(key);
-      try { await peer.addIceCandidate(new RTCIceCandidate(candidate)); } catch (_) {}
+      try {
+        await peer.addIceCandidate(new RTCIceCandidate(candidate));
+        candidateKeys.current.add(key);
+      } catch (_) {
+        // Ne pas marquer le candidat : il sera retenté au prochain refresh.
+      }
     }
     if (updated.status === 'ended' && peer.connectionState !== 'closed') { setMessage('L’appel est terminé.'); closeLocalOnly(); }
   }
