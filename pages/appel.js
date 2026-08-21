@@ -86,12 +86,28 @@ export default function Appel() {
     }
   }
 
+  async function getIceServers() {
+    const fallback = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+    ];
+    try {
+      const res = await fetch('/api/turn-config', { cache: 'no-store' });
+      if (!res.ok) return fallback;
+      const data = await res.json();
+      return Array.isArray(data?.iceServers) && data.iceServers.length ? data.iceServers : fallback;
+    } catch (_) {
+      return fallback;
+    }
+  }
+
   async function createPeer(side, type) {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('Ce navigateur ne permet pas le microphone ou la caméra.');
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: type === 'video' });
     streamRef.current = stream;
     if (localVideo.current) localVideo.current.srcObject = stream;
-    const peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] });
+    const iceServers = await getIceServers();
+    const peer = new RTCPeerConnection({ iceServers });
     peerRef.current = peer;
     roleRef.current = side;
     stream.getTracks().forEach((track) => peer.addTrack(track, stream));
