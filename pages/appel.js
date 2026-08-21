@@ -23,6 +23,7 @@ export default function Appel() {
   const roleRef = useRef(null);
   const remoteDescriptionSet = useRef(false);
   const candidateKeys = useRef(new Set());
+  const candidateSendChain = useRef(Promise.resolve());
   const autoStarted = useRef(false);
 
   useEffect(() => {
@@ -69,8 +70,6 @@ export default function Appel() {
   }, [session, conversationId, requestedMode, call]);
 
   useEffect(() => () => closeLocalOnly(), []);
-
-  // Garde l'écran allumé tant que la page d'appel est ouverte.
   useEffect(() => requestWakeLock(), []);
 
   async function api(body) {
@@ -101,6 +100,13 @@ export default function Appel() {
     }
   }
 
+  function queueCandidate(callId, side, signal) {
+    candidateSendChain.current = candidateSendChain.current
+      .catch(() => {})
+      .then(() => api({ action: 'candidate', callId, side, signal }));
+    return candidateSendChain.current;
+  }
+
   async function createPeer(side, type) {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('Ce navigateur ne permet pas le microphone ou la caméra.');
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: type === 'video' });
@@ -117,7 +123,7 @@ export default function Appel() {
       if (!event.candidate) return;
       const signal = event.candidate.toJSON();
       if (!peer.callId) peer.pendingCandidates.push(signal);
-      else api({ action: 'candidate', callId: peer.callId, side, signal }).catch(() => {});
+      else queueCandidate(peer.callId, side, signal).catch(() => {});
     };
     peer.onconnectionstatechange = () => {
       if (peer.connectionState === 'connected') setMessage('Appel Wakh Reek connecté');
@@ -135,7 +141,7 @@ export default function Appel() {
       await peer.setLocalDescription(offer);
       const created = await api({ action: 'start', callType: type, signal: peer.localDescription.toJSON() });
       peer.callId = created.id;
-      for (const signal of peer.pendingCandidates) await api({ action: 'candidate', callId: created.id, side: 'caller', signal });
+      for (const signal of peer.pendingCandidates) await queueCandidate(created.id, 'caller', signal);
       peer.pendingCandidates = [];
       setCall(created);
       setMessage('📞 Appel en cours… L’autre membre doit ouvrir cette discussion et accepter.');
@@ -153,7 +159,6 @@ export default function Appel() {
       peer.callId = call.id;
       await peer.setRemoteDescription(new RTCSessionDescription(call.offer));
       remoteDescriptionSet.current = true;
-      // Applique immédiatement les candidats déjà reçus pendant l'ouverture caméra/micro.
       await applyRemoteSignals(call);
       const answer = await peer.createAnswer();
       await peer.setLocalDescription(answer);
@@ -172,10 +177,6 @@ export default function Appel() {
       await peer.setRemoteDescription(new RTCSessionDescription(updated.answer));
       remoteDescriptionSet.current = true;
     }
-
-    // Un candidat ICE ne peut être ajouté qu'après setRemoteDescription.
-    // S'il arrive trop tôt (fréquent sur mobile en vidéo), on le laisse non marqué
-    // pour que le prochain rafraîchissement puisse le réessayer.
     if (!peer.remoteDescription?.type) return;
 
     const candidates = roleRef.current === 'caller' ? updated.callee_candidates : updated.caller_candidates;
@@ -185,9 +186,7 @@ export default function Appel() {
       try {
         await peer.addIceCandidate(new RTCIceCandidate(candidate));
         candidateKeys.current.add(key);
-      } catch (_) {
-        // Ne pas marquer le candidat : il sera retenté au prochain refresh.
-      }
+      } catch (_) {}
     }
     if (updated.status === 'ended' && peer.connectionState !== 'closed') { setMessage('L’appel est terminé.'); closeLocalOnly(); }
   }
@@ -195,7 +194,9 @@ export default function Appel() {
   function closeLocalOnly() {
     peerRef.current?.close(); peerRef.current = null;
     streamRef.current?.getTracks().forEach((track) => track.stop()); streamRef.current = null;
-    remoteDescriptionSet.current = false; candidateKeys.current = new Set();
+    remoteDescriptionSet.current = false;
+    candidateKeys.current = new Set();
+    candidateSendChain.current = Promise.resolve();
   }
 
   async function endCall() {
