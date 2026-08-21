@@ -107,6 +107,25 @@ export default function Appel() {
     return candidateSendChain.current;
   }
 
+  function waitForIceGatheringComplete(peer, timeoutMs = 5000) {
+    if (peer.iceGatheringState === 'complete') return Promise.resolve();
+    return new Promise((resolve) => {
+      let finished = false;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        peer.removeEventListener('icegatheringstatechange', onStateChange);
+        resolve();
+      };
+      const onStateChange = () => {
+        if (peer.iceGatheringState === 'complete') finish();
+      };
+      const timer = setTimeout(finish, timeoutMs);
+      peer.addEventListener('icegatheringstatechange', onStateChange);
+    });
+  }
+
   async function createPeer(side, type) {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('Ce navigateur ne permet pas le microphone ou la caméra.');
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: type === 'video' });
@@ -139,6 +158,8 @@ export default function Appel() {
       const peer = await createPeer('caller', type);
       const offer = await peer.createOffer();
       await peer.setLocalDescription(offer);
+      setMessage('Recherche du meilleur chemin réseau…');
+      await waitForIceGatheringComplete(peer);
       const created = await api({ action: 'start', callType: type, signal: peer.localDescription.toJSON() });
       peer.callId = created.id;
       for (const signal of peer.pendingCandidates) await queueCandidate(created.id, 'caller', signal);
@@ -162,6 +183,8 @@ export default function Appel() {
       await applyRemoteSignals(call);
       const answer = await peer.createAnswer();
       await peer.setLocalDescription(answer);
+      setMessage('Finalisation de la connexion…');
+      await waitForIceGatheringComplete(peer);
       const updated = await api({ action: 'answer', callId: call.id, signal: peer.localDescription.toJSON() });
       setCall(updated); setMessage('Appel Wakh Reek connecté');
     } catch (error) {
