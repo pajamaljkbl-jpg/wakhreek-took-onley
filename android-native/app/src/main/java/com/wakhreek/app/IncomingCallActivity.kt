@@ -1,7 +1,9 @@
 package com.wakhreek.app
 
 import android.app.Activity
+import android.app.KeyguardManager
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import android.widget.Button
@@ -11,12 +13,21 @@ import android.widget.TextView
 class IncomingCallActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setShowWhenLocked(true)
-        setTurnScreenOn(true)
+
+        // Réveille l'écran et affiche l'appel au-dessus de l'écran verrouillé.
+        // (setShowWhenLocked / setTurnScreenOn n'existent qu'à partir d'Android 8.1)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        }
         window.addFlags(
             WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-            WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
+            WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON or
+            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
         )
+        // Déverrouille l'écran une fois l'appel affiché (sans demander le code).
+        val keyguard = getSystemService(KeyguardManager::class.java)
+        keyguard?.requestDismissKeyguard(this, null)
 
         val caller = intent.getStringExtra("caller") ?: "Wakhreek"
         val type = intent.getStringExtra("callType") ?: "audio"
