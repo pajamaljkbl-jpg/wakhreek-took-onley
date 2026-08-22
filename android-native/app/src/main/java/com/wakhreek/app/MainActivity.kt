@@ -25,8 +25,23 @@ import com.google.firebase.messaging.FirebaseMessaging
 import org.json.JSONObject
 
 class MainActivity : Activity() {
+    companion object {
+        @JvmStatic
+        var isForeground = false
+    }
+
     private lateinit var webView: WebView
     private val mediaRequestCode = 1001
+
+    override fun onResume() {
+        super.onResume()
+        isForeground = true
+    }
+
+    override fun onPause() {
+        super.onPause()
+        isForeground = false
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

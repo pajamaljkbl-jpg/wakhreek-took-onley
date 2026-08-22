@@ -25,6 +25,8 @@ export default function Appel() {
   const candidateKeys = useRef(new Set());
   const candidateSendChain = useRef(Promise.resolve());
   const autoStarted = useRef(false);
+  const autoAnswer = useRef(false);
+  const answeredRef = useRef(false);
 
   useEffect(() => {
     const client = getSupabaseBrowser();
@@ -37,6 +39,7 @@ export default function Appel() {
     else if (!isUuid(id)) setMessage('Lien d’appel invalide. Ouvre l’appel depuis une discussion Wakh Reek.');
     else setConversationId(id);
     if (mode === 'audio' || mode === 'video') setRequestedMode(mode);
+    if (params.get('answer') === '1') autoAnswer.current = true;
     return () => listener.subscription.unsubscribe();
   }, []);
 
@@ -50,6 +53,12 @@ export default function Appel() {
         if (!res.ok) throw new Error(data.error || 'Impossible de joindre la salle');
         if (active) setCall(data);
         if (data && peerRef.current) await applyRemoteSignals(data);
+        // Décroche automatiquement quand le lien arrive avec answer=1
+        // (bouton "Répondre" de l'appli Android ou de la notification).
+        if (active && data && autoAnswer.current && !answeredRef.current && !peerRef.current && data.status === 'ringing' && data.offer) {
+          answeredRef.current = true;
+          answerCall(data);
+        }
         if (active && !data) setMessage('Salle prête. Tu peux démarrer un appel.');
       } catch (error) {
         if (isAuthError(error)) { if (active) window.location.href = '/compte'; return; }
@@ -172,20 +181,21 @@ export default function Appel() {
     } finally { setBusy(false); }
   }
 
-  async function answerCall() {
+  async function answerCall(target) {
+    const c = target || call;
     try {
-      if (!call?.offer) return;
+      if (!c?.offer) return;
       setBusy(true); setMessage('Connexion à l’appel…');
-      const peer = await createPeer('callee', call.call_type);
-      peer.callId = call.id;
-      await peer.setRemoteDescription(new RTCSessionDescription(call.offer));
+      const peer = await createPeer('callee', c.call_type);
+      peer.callId = c.id;
+      await peer.setRemoteDescription(new RTCSessionDescription(c.offer));
       remoteDescriptionSet.current = true;
-      await applyRemoteSignals(call);
+      await applyRemoteSignals(c);
       const answer = await peer.createAnswer();
       await peer.setLocalDescription(answer);
       setMessage('Finalisation de la connexion…');
       await waitForIceGatheringComplete(peer);
-      const updated = await api({ action: 'answer', callId: call.id, signal: peer.localDescription.toJSON() });
+      const updated = await api({ action: 'answer', callId: c.id, signal: peer.localDescription.toJSON() });
       setCall(updated); setMessage('Appel Wakh Reek connecté');
     } catch (error) {
       const explanation = error?.name === 'NotAllowedError' ? 'Autorise le microphone et la caméra pour Wakh Reek puis réessaie.' : (error.message || 'Impossible de répondre à cet appel.');

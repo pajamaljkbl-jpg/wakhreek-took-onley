@@ -44,7 +44,7 @@ export default function Membres() {
           if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
             const callerName = call.caller?.full_name || call.caller?.phone || 'Membre Wakh Reek';
             const notification = new Notification(call.call_type === 'video' ? '🎥 Appel vidéo Wakh Reek' : '📞 Appel audio Wakh Reek', { body: `${callerName} vous appelle`, tag: `wakhreek-call-${call.id}`, requireInteraction: true });
-            notification.onclick = () => { window.focus?.(); window.location.href = `/appel?conversationId=${encodeURIComponent(call.conversation_id)}`; };
+            notification.onclick = () => { window.focus?.(); window.location.href = `/appel?conversationId=${encodeURIComponent(call.conversation_id)}&answer=1`; };
           }
         }
         if (!call && notifiedCallRef.current) { notifiedCallRef.current = null; stopRinging(); }
@@ -84,7 +84,7 @@ export default function Membres() {
       setNotificationsReady(typeof Notification === 'undefined' || Notification.permission === 'granted');
     } catch {}
   }
-  function answerIncoming() { if (!incomingCall) return; stopRinging(); window.location.href = `/appel?conversationId=${encodeURIComponent(incomingCall.conversation_id)}`; }
+  function answerIncoming() { if (!incomingCall) return; stopRinging(); window.location.href = `/appel?conversationId=${encodeURIComponent(incomingCall.conversation_id)}&answer=1`; }
   async function rejectIncoming() { if (!incomingCall) return; try { await api('/api/calls', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'end', conversationId: incomingCall.conversation_id, callId: incomingCall.id }) }); } catch {} stopRinging(); setIncomingCall(null); }
 
   async function openMember(member) { try { const conv = await api('/api/member-conversations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ memberId: member.id }) }); setActive({ ...conv, partner: member }); await refresh(); } catch (e) { setError(e.message); } }

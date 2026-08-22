@@ -33,7 +33,9 @@ class IncomingCallActivity : Activity() {
         val answer = Button(this).apply {
             text = "Répondre"
             setOnClickListener {
-                val url = intent.getStringExtra("url") ?: "https://www.wakhreek.com"
+                val base = intent.getStringExtra("url") ?: "https://www.wakhreek.com"
+                // answer=1 → la page web décroche automatiquement (pas de double confirmation)
+                val url = if (base.contains("?")) "$base&answer=1" else "$base?answer=1"
                 val open = Intent(this@IncomingCallActivity, MainActivity::class.java).apply {
                     putExtra("url", url)
                     flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP

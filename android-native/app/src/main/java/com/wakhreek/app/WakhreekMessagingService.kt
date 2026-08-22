@@ -25,6 +25,7 @@ class WakhreekMessagingService : FirebaseMessagingService() {
         val caller = data["caller"] ?: "Wakhreek"
         val callType = data["callType"] ?: "audio"
         val url = data["url"] ?: "https://www.wakhreek.com"
+        val answerUrl = if (url.contains("?")) "$url&answer=1" else "$url?answer=1"
 
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
@@ -37,15 +38,27 @@ class WakhreekMessagingService : FirebaseMessagingService() {
         }
         manager.createNotificationChannel(channel)
 
-        val fullIntent = Intent(this, IncomingCallActivity::class.java).apply {
-            putExtra("caller", caller)
-            putExtra("callType", callType)
-            putExtra("url", url)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val pending = PendingIntent.getActivity(this, callId.hashCode(), fullIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val foreground = MainActivity.isForeground
 
-        val notification = NotificationCompat.Builder(this, "incoming_calls")
+        // App ouverte : le site affiche déjà la bannière d'appel. On montre une
+        // notification compacte ; un tap ouvre la page d'appel avec réponse auto.
+        // App fermée / écran verrouillé : plein écran "Répondre / Refuser".
+        val tapIntent: Intent = if (foreground) {
+            Intent(this, MainActivity::class.java).apply {
+                putExtra("url", answerUrl)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+        } else {
+            Intent(this, IncomingCallActivity::class.java).apply {
+                putExtra("caller", caller)
+                putExtra("callType", callType)
+                putExtra("url", answerUrl)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+        }
+        val pending = PendingIntent.getActivity(this, callId.hashCode(), tapIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+
+        val builder = NotificationCompat.Builder(this, "incoming_calls")
             .setSmallIcon(android.R.drawable.sym_call_incoming)
             .setContentTitle(if (callType == "video") "Appel vidéo Wakhreek" else "Appel audio Wakhreek")
             .setContentText("$caller vous appelle")
@@ -55,11 +68,13 @@ class WakhreekMessagingService : FirebaseMessagingService() {
             .setOngoing(true)
             .setAutoCancel(false)
             .setContentIntent(pending)
-            .setFullScreenIntent(pending, true)
             .setTimeoutAfter(45_000)
-            .build()
 
-        manager.notify(callId.hashCode(), notification)
+        if (!foreground) {
+            builder.setFullScreenIntent(pending, true)
+        }
+
+        manager.notify(callId.hashCode(), builder.build())
     }
 
     private fun showMissedCall(data: Map<String, String>) {
