@@ -2,9 +2,12 @@ package com.wakhreek.app
 
 import android.Manifest
 import android.app.Activity
+import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -28,6 +31,8 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        createNotificationChannels()
+
         webView = WebView(this)
         setContentView(webView)
 
@@ -40,7 +45,7 @@ class MainActivity : Activity() {
             databaseEnabled = true
             mediaPlaybackRequiresUserGesture = false
             cacheMode = WebSettings.LOAD_DEFAULT
-            userAgentString = "$userAgentString WakhreekAndroid/1.0"
+            userAgentString = "$userAgentString WakhreekAndroid/1.1"
         }
 
         webView.webChromeClient = object : WebChromeClient() {
@@ -92,6 +97,36 @@ class MainActivity : Activity() {
 
     override fun onBackPressed() {
         if (::webView.isInitialized && webView.canGoBack()) webView.goBack() else super.onBackPressed()
+    }
+
+    private fun createNotificationChannels() {
+        val manager = getSystemService(NotificationManager::class.java)
+        val ringtone = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+        val ringtoneAttributes = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+            .build()
+
+        val incoming = NotificationChannel(
+            "incoming_calls",
+            "Appels entrants",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Appels audio et vidéo Wakhreek"
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 700, 250, 700, 250, 900)
+            setSound(ringtone, ringtoneAttributes)
+            lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+        }
+        val missed = NotificationChannel(
+            "missed_calls",
+            "Appels manqués",
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = "Appels manqués Wakhreek"
+            lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+        }
+        manager.createNotificationChannel(incoming)
+        manager.createNotificationChannel(missed)
     }
 
     private fun ensureNativeMediaPermissions() {
